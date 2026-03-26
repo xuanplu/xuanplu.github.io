@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="system">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self';">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f8f9fa" id="theme-color-meta">
+<meta name="description" content="拾绪 - 一款纯粹的 Local-first 本地私密日记本。端到端硬件级加密，数据完全掌握在自己手中。">
+<meta property="og:title" content="「拾绪」：一座无需联网的私人思维孤岛。">
+<meta property="og:description" content="零服务器、不连外网、AES-GCM 加密。你的思绪，仅对你可见。">
+<meta property="og:image" content="shixu.png">
+<meta property="og:type" content="website">
+<title>拾绪</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="shixu.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="./lunar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js"></script>
+<style>
+:root { 
+    --primary: #2c3e50; --accent: #d4af37; --bg: #f8f9fa; --card: #ffffff; --text: #2c3e50; 
+    --danger: #e74c3c; --sub: #525c68; --mood-bg: #e9ecef;
+    --nav-height: 48px; 
+    /* 拾绪·内观 专属莫兰迪色卡 */
+    --energy: 212, 175, 55; --healing: 157, 176, 163; --thinking: 92, 122, 153;
+    --release: 194, 107, 99; --melancholy: 138, 136, 148; --custom: 163, 160, 152;
+}
+[data-theme="dark"] { --primary: #ecf0f1; --accent: #f1c40f; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --mood-bg: #2c2c2c;}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --primary: #ecf0f1; --accent: #f1c40f; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --mood-bg: #2c2c2c;}
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+html, body { height: 100%; width: 100%; margin: 0; padding: 0; background: var(--bg); font-family: -apple-system, system-ui, sans-serif; color: var(--text); overflow-x: hidden; transition: background 0.3s; }
+/* 彻底移除页面级过渡动画，全面让权给 iOS 的原生侧滑 Snapshot */
+.page, #d-page { transition: none; }
+#d-page { 
+    display: none; 
+    position: fixed; 
+    inset: 0; 
+    width: 100%; 
+    height: 100dvh; 
+    min-height: -webkit-fill-available;
+    background: var(--bg); 
+    z-index: 100; 
+    opacity: 0; 
+    padding-top: env(safe-area-inset-top); 
+    overflow-y: auto; 
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; 
+}
+#d-page.active { opacity: 1; transform: translateX(0); }
+#h-page.fade-out { opacity: 0; pointer-events: none; }
+.static-nav { position: relative; width: 100%; min-height: var(--nav-height); background: var(--bg); border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; }
+.cal-section { margin: 8px 15px; border-radius: 20px; background: var(--card); padding-bottom: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.03); }
+.cal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 8px; gap: 1px; transition: opacity 0.15s ease-out; }
+.cal-grid.fade { opacity: 0; }
+.day { 
+    height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+    border-radius: 12px; cursor: pointer; position: relative;
+    transition: background-color 0.15s ease, transform 0.1s cubic-bezier(0.4, 0, 0.2, 1); 
+    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+.day span:first-child { font-size: 17px; font-weight: 600; }
+.day .l { font-size: 12px; margin-top: 0px; white-space: nowrap; letter-spacing: -0.2px; transform: scale(0.82); }
+.day.recorded { background: var(--mood-bg); }
+.day.is-today { background: var(--primary) !important; color: var(--bg); }
+.day.recorded::after { content: ''; position: absolute; bottom: 2px; width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
+.day:active { transform: scale(0.92); background-color: var(--mood-bg); }
+.day.is-today:active { transform: scale(0.92); background-color: var(--primary) !important; opacity: 0.8; }
+.day.recorded:active { background-color: rgba(0,0,0,0.08); }
+[data-theme="dark"] .day.recorded:active { background-color: rgba(255,255,255,0.08); }
+
+.btn-pill { 
+    height: 32px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; 
+    font-size: 13px; font-weight: 600; padding: 0 16px; border-radius: 16px; border: none; 
+    background: var(--mood-bg); color: var(--primary); cursor: pointer; transition: transform 0.1s ease, filter 0.1s ease; 
+    white-space: nowrap; flex-shrink: 0; 
+}
+.btn-pill:active { transform: scale(0.95); filter: brightness(0.9); }
+.btn-save { background: var(--primary); color: var(--bg); }
+.icon-btn { background: none; border: none; padding: 8px; display: flex; align-items: center; justify-content: center; transition: transform 0.1s ease, background-color 0.1s ease; border-radius: 50%; }
+.icon-btn svg { width: 18px; height: 18px; fill: var(--sub); }
+.icon-btn:active { transform: scale(0.85); background-color: var(--mood-bg); }
+
+.editor-box { width: 100%; min-height: 30vh; font-size: 18px; line-height: 1.8; letter-spacing: 0.5px; color: var(--text); white-space: pre-wrap; outline: none; }
+.editor-box:empty:before { content: attr(placeholder); color: var(--sub); opacity: 0.5; }
+.box-header { font-size: 12px; font-weight: 700; margin: 0 0 12px; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+/* ==========================================
+   数据可视化：岁月书脊 (波形音轨排列)
+========================================== */
+.growth-grid { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 3px; /* 恰到好处的呼吸空间 */
+    align-items: center; /* 确保高低不一的书脊垂直居中对齐，形成波形 */
+}
+.growth-cell { 
+    width: 6px; /* 极窄的宽度 */
+    border-radius: 3px; /* 胶囊圆角 */
+    background: var(--mood-bg); 
+    transition: 0.3s; 
+}
+/* 根据字数动态改变高度，形成真实的岁月音轨 */
+.growth-cell.lv-1 { height: 12px; } /* 较短的记录 */
+.growth-cell.lv-2 { height: 18px; } /* 中等长度 */
+.growth-cell.lv-3 { height: 24px; } /* 深度长文 */
+/* 弹窗背景层的渐隐渐现 */
+.modal { 
+    position: fixed; inset: 0; 
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); 
+    z-index: 300; display: none; align-items: flex-end; 
+    opacity: 0; /* 动画起点 */
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.modal.show { opacity: 1; }
+
+/* 弹窗内容区的底部滑出 (iOS Action Sheet 风格) */
+.modal-content { 
+    background: var(--card); width: 100%; 
+    border-radius: 25px 25px 0 0; padding: 20px; 
+    max-height: 85vh; overflow-y: auto; 
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); 
+    transform: translateY(100%); /* 动画起点 */
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.modal.show .modal-content {
+    transform: translateY(0);
+}
+#auth-layer { position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#pwd-i { padding:15px; border:none; background:var(--mood-bg); color:var(--text); border-radius:20px; margin-bottom:20px; text-align:center; font-size: 24px; width:220px; }
+
+.setting-row { height: 54px; display: flex; align-items: center; justify-content: space-between; background: var(--mood-bg); padding: 0 18px; margin-bottom: 12px; border-radius: 14px; transition: transform 0.15s ease, opacity 0.15s ease; -webkit-tap-highlight-color: transparent; }
+.setting-row:active { transform: scale(0.97); opacity: 0.8; }
+.modal-content .btn-pill { height: 54px !important; width: 100% !important; padding: 0 18px !important; margin-bottom: 12px !important; border-radius: 14px !important; font-size: 15px !important; box-sizing: border-box; }
+.theme-switch-group { height: 54px; display: flex; align-items: center; background: var(--mood-bg); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
+.theme-switch-group .theme-btn { flex: 1; padding: 10px 0; text-align: center; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); cursor: pointer; transition: 0.2s; }
+.theme-btn.active { background: var(--card); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+#mood-grid-main { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.mood-tag { display: flex; align-items: center; justify-content: center; height: 44px; padding: 0 4px; margin: 0; border-radius: 14px; background: var(--mood-bg); color: var(--sub); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; white-space: nowrap; }
+.mood-tag.active { background: var(--primary) !important; color: var(--bg) !important; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.mood-tag.active.f-energy { background: rgb(var(--energy)) !important; color: #fff !important; }
+.mood-tag.active.f-healing { background: rgb(var(--healing)) !important; color: #fff !important; }
+.mood-tag.active.f-thinking { background: rgb(var(--thinking)) !important; color: #fff !important; }
+.mood-tag.active.f-melancholy { background: rgb(var(--melancholy)) !important; color: #fff !important; }
+.mood-tag.active.f-release { background: rgb(var(--release)) !important; color: #fff !important; }
+
+.cal-ctrl button { transition: transform 0.1s ease, background-color 0.1s; border-radius: 12px; }
+.cal-ctrl button:active { transform: scale(0.85); background-color: rgba(0,0,0,0.08) !important; }
+
+#toast-container { position: fixed; top: env(safe-area-inset-top, 20px); left: 0; right: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+.toast { padding: 12px 24px; border-radius: 12px; background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-left: 4px solid var(--accent); animation: toast-in 0.3s cubic-bezier(0.4, 0, 0.2, 1); transition: opacity 0.3s ease, transform 0.3s ease; max-width: 90%; text-align: center; word-break: break-word; }
+.toast.t-error { border-left-color: var(--danger); }
+.toast.t-success { border-left-color: var(--healing); }
+.toast.fade-out { opacity: 0; transform: translateY(-20px) scale(0.95); }
+[data-theme="dark"] .toast { box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-left: 4px solid var(--accent); }
+[data-theme="dark"] .toast.t-error { border-left-color: var(--danger); }
+[data-theme="dark"] .toast.t-success { border-left-color: var(--healing); }
+@keyframes toast-in { 0% { opacity: 0; transform: translateY(-20px) scale(0.95); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media print {
+    #h-page, .static-nav, #settings-modal, #more-modal, #toast-container, .modal { display: none !important; }
+    html, body, .page, #d-page { height: auto !important; min-height: auto !important; max-height: none !important; position: static !important; background: white !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+    #title-v, #meta-v { break-after: avoid; page-break-after: avoid; }
+    #content-v { break-inside: auto; color: black !important;}
+    * { filter: none !important; }
+}
+
+@media (min-width: 768px) {
+    body { background: #eef2f5; display: flex; justify-content: center; }
+    [data-theme="dark"] body { background: #0a0a0a; }
+    .page, #d-page, #auth-layer { position: fixed !important; inset: 0 !important; margin: 20px auto !important; width: 100% !important; max-width: 480px !important; height: calc(100vh - 40px) !important; border-radius: 30px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); overflow-y: auto !important; }
+    .modal { position: fixed !important; inset: 0 !important; margin: 20px auto !important; width: 100% !important; max-width: 480px !important; height: calc(100vh - 40px) !important; border-radius: 30px !important; overflow: hidden !important; }
+    [data-theme="dark"] .page, [data-theme="dark"] #d-page, [data-theme="dark"] #auth-layer { border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    #toast-container { max-width: 480px; margin: 0 auto; top: 40px; }
+}
+
+#mood-trigger-btn { user-select: none; -webkit-tap-highlight-color: transparent; }
+#mood-trigger-btn:active { transform: scale(0.92); opacity: 0.8; }
+
+.main-container { max-width: 650px; margin: 0 auto; padding: 15px 20px; }
+::selection { background-color: rgba(0, 0, 0, 0.12); }
+[data-theme="dark"] ::selection { background-color: rgba(255, 255, 255, 0.18); }
+
+html.android-device, body.android-device { overscroll-behavior-y: none !important; }
+body.native-scroll #d-page { position: absolute !important; height: auto !important; min-height: 100vh !important; overflow: visible !important; }
+html.ios-device.is-editing, body.ios-device.is-editing { height: auto !important; min-height: 100vh !important; min-height: 100svh !important; overflow-y: auto !important; position: relative !important; background-color: var(--bg) !important; }
+body.ios-device.native-scroll.is-editing #d-page { position: relative !important; height: auto !important; min-height: 100vh !important; min-height: 100svh !important; overflow: visible !important; transform: none !important; }
+#v-box { padding-bottom: calc(45vh + env(safe-area-inset-bottom)) !important; }
+#e-box { padding-bottom: 0 !important; }
+#e-content { min-height: 75vh !important; padding-bottom: 15vh !important; }
+html.modal-open, body.modal-open { overflow: hidden !important; touch-action: none !important; }
+
+@media (hover: hover) and (pointer: fine) {
+    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    html, body, html.is-editing, body.is-editing { overflow-y: scroll !important; }
+    .btn-pill:active, .icon-btn:active, .day:active { transform: none !important; filter: brightness(0.9); }
+}
+/* 彻底抹除 Windows/PC 默认的丑陋滚动条，保留滚动能力 */
+::-webkit-scrollbar {
+    width: 6px; /* 极细的滚动条 */
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent; 
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1); 
+    border-radius: 10px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15); 
+}
+/* 在移动设备上完全隐藏滚动条（利用伪类特征） */
+@media (hover: none) and (pointer: coarse) {
+    ::-webkit-scrollbar { width: 0; display: none; }
+}
+/* ==========================================
+   单向动画引擎 (避免滥用 transition 导致的全局状态黏连)
+========================================== */
+@keyframes slideFadeIn {
+    0% { opacity: 0; transform: translateY(15px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* 进场类：带有轻微物理浮力感 */
+.animate-in { 
+    animation: slideFadeIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
+}
+/* 退场类：极速淡出 */
+.animate-out { 
+    animation: fadeOut 0.15s ease-out forwards; 
+}
+</style>
+</head>
+<body>
+<div id="toast-container"></div>
+<div id="auth-layer">
+    <h2 style="font-weight:200; letter-spacing:10px; margin-bottom: 30px;">拾绪</h2>
+    <input type="password" id="pwd-i" placeholder="解锁密码" autocomplete="off" onkeydown="if(event.key==='Enter') checkAuth()">
+    <button class="btn-pill btn-save" style="padding: 12px 40px;" onclick="checkAuth()">解锁</button>
+</div>
+
+<div id="h-page" class="page">
+<div id="ios-survival-banner" style="display: none; background: rgba(231, 76, 60, 0.1); border-bottom: 1px solid rgba(231, 76, 60, 0.2); padding: calc(10px + env(safe-area-inset-top)) 20px 10px; align-items: flex-start; gap: 12px; animation: slideDown 0.4s ease-out;">
+    <svg style="width:24px; height:24px; stroke:var(--danger); fill:none; stroke-width:2; flex-shrink:0; margin-top:2px;" viewBox="0 0 24 24">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
+    <div style="flex: 1;">
+        <div style="font-size: 13px; font-weight: 700; color: var(--danger); margin-bottom: 4px;">严重的数据丢失风险</div>
+        <div style="font-size: 11px; color: var(--text); opacity: 0.8; line-height: 1.5; margin-bottom: 8px;">
+            在 Safari 中运行超过 7 天未使用，苹果系统将自动摧毁您的所有日记与图片。<br>
+            <strong style="color:var(--text)">请务必点击底部「分享 <svg style="width:10px; height:10px; display:inline;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>」图标，选择「添加到主屏幕」。</strong>
+        </div>
+    </div>
+    <button onclick="document.getElementById('ios-survival-banner').style.display='none'" style="background:none; border:none; color:var(--sub); padding:4px; font-size:16px;">✕</button>
+</div>
+    <div style="padding: calc(15px + env(safe-area-inset-top)) 20px 10px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <h1 style="font-size: 26px; font-weight: 300; margin: 0; letter-spacing: 2px;">拾绪</h1>
+            <div id="app-main-title" style="font-size: 13px; color: var(--sub); opacity: 0.7; letter-spacing: 1px; font-weight: 600;">读取中...</div>
+        </div>
+        <button class="icon-btn" onclick="openModal('settings-modal')">
+            <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.13,5.91,7.62,6.29L5.23,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.72,8.87 c-0.11,0.2-0.06,0.47,0.12,0.61l2.03,1.58C4.84,11.36,4.81,11.68,4.81,12c0,0.32,0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.50,0.38,1.03,0.70,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+        </button>
+    </div>
+
+    <div style="display: flex; gap: 20px; padding: 0 20px; margin-bottom: 10px;">
+        <div><span style="font-size: 12px; color: var(--sub); opacity: 0.7; display: block;">累计</span><span id="s-total" style="font-size: 18px; font-weight: bold;">0</span></div>
+        <div><span style="font-size: 12px; color: var(--sub); opacity: 0.7; display: block;">本月</span><span id="s-month" style="font-size: 18px; font-weight: bold;">0</span></div>
+        <div><span style="font-size: 12px; color: var(--sub); opacity: 0.7; display: block;">字数统计</span><span id="s-words" style="font-size: 18px; font-weight: bold;">0</span></div>
+    </div>
+
+    <div class="cal-section">
+        <div class="cal-header">
+            <div id="cal-m-label" style="font-weight: 600; font-size: 18px;"></div>
+            <div class="cal-ctrl" style="display: flex; background: none; padding: 3px; border-radius: 18px; gap: 2px;">
+                <button style="background:none; color: var(--primary); border:none; padding: 5px 12px; font-size:18px; cursor:pointer;" onclick="moveMonth(-1)">◀</button>
+                <button style="background:rgba(0,0,0,0.03); color: var(--accent); border:none; padding: 5px 12px; font-size:16px; border-radius:15px; cursor:pointer;" onclick="goToday()">今天</button>
+                <button style="background:none; color: var(--primary); border:none; padding: 5px 12px; font-size:18px; cursor:pointer;" onclick="moveMonth(1)">▶</button>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--sub); margin-bottom: 8px; font-weight: bold;"><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div></div>
+        <div class="cal-grid" id="cal-g"></div>
+    </div>
+
+    <div style="margin: 10px 15px; padding: 15px 18px; background: var(--card); border-radius: 20px; box-shadow: 0 5px 25px rgba(0,0,0,0.03);">
+        <div class="box-header"><span id="growth-title">心绪印记</span><span id="days-count">0 天</span></div>
+        <div class="growth-grid" id="growth-grid"></div>
+    </div>
+
+    <div style="margin: 10px 15px; padding-bottom: 20px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="search-input" placeholder="搜索，或点击右侧漫游..." oninput="filterIndex()" style="flex: 1; padding: 15px; border-radius: 15px; border: none; background: var(--card); font-size: 14px; color: var(--text); outline: none;">
+            
+            <button class="btn-pill btn-save" style="width: 48px; height: 48px; padding: 0; border-radius: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1);" onclick="goRandom()" aria-label="漫游时光机">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </button>
+        </div>
+        <div id="index-list" style="margin-top:10px;"></div>
+    </div>
+</div>
+
+<div id="d-page">
+    <div class="static-nav" style="min-height: 40px; padding: 2px 10px; display: flex; align-items: center; justify-content: space-between; position: relative;">
+        <div style="flex: 1; display: flex; justify-content: flex-start; z-index: 2;">
+            <button class="btn-pill" onclick="closePage()">返回</button>
+        </div>
+        <span id="d-date-title" style="font-size: 16px; font-weight: 700; letter-spacing: 1px; position: absolute; left: 50%; transform: translateX(-50%); max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; z-index: 1;"></span>
+        <div id="v-tools" style="flex: 1; display: flex; justify-content: flex-end; gap: 4px; z-index: 2;">
+            <button class="btn-pill btn-save" onclick="switchToEdit()">编辑</button>
+            <button class="icon-btn" onclick="openModal('more-modal')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+            </button>
+        </div>
+        <div id="e-tools" style="flex: 1; display: none; justify-content: flex-end; z-index: 2;">
+            <button class="btn-pill btn-save" onclick="save(true)">完成</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div id="v-box">
+            <h2 id="title-v" style="margin-top: 15px; font-size: 26px; font-weight: 700; line-height: 1.4; margin-bottom: 12px; color: var(--text); letter-spacing: 0.5px; overflow-wrap: break-word; word-wrap: break-word;"></h2>
+            <div id="meta-v" style="display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--sub); margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid rgba(0,0,0,0.05);"></div>
+            <div id="content-v" style="font-size: 18px; line-height: 1.8; color: var(--text); white-space: pre-wrap; letter-spacing: 0.5px; overflow-wrap: break-word; word-wrap: break-word;"></div>
+        </div>
+
+        <div id="e-box" style="display: none;">
+            <textarea id="e-title" placeholder="无标题" rows="1" style="width:100%; border:none; background:none; font-family: inherit; font-size: 26px; font-weight: 700; line-height: 1.4; margin: 0; padding: 15px 0 12px; color: var(--text); outline:none; resize:none; overflow:hidden;"></textarea>
+			
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 1px dashed rgba(0,0,0,0.08);">
+                <div onmousedown="if(event.cancelable) event.preventDefault(); openMoodModal();" 
+					 ontouchstart="if(event.cancelable) event.preventDefault(); openMoodModal();" 
+					 id="mood-trigger-btn" 
+					 style="font-size: 13px; color: var(--accent); font-weight: 600; cursor: pointer; padding: 5px 0;">
+					 ◌ 选择心情...
+				</div>
+                
+                <div id="save-hint" style="font-size: 11px; color: var(--sub); opacity: 0.6; font-weight: 600;"></div>
+            </div>
+			
+            <div id="e-content" contenteditable="true" class="editor-box" placeholder="开始记录..."></div> 
+        </div>
+    </div>
+</div>
+
+<div id="settings-modal" class="modal" onclick="closeModal('settings-modal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3 style="font-weight: 300; margin-top: 0; margin-bottom: 20px;">系统设置</h3>   
+        
+		<button id="btn-install-pwa" class="btn-pill btn-save" style="display:none; background: var(--accent); color: var(--bg);">安装到桌面</button>
+        <div id="storage-status" style="font-size: 12px; color: var(--sub); text-align: center; margin-bottom: 12px; display: none;">检测中...</div>
+		
+        <div class="theme-switch-group">
+            <div class="theme-btn" onclick="setTheme('light')" id="theme-light">浅色</div>
+            <div class="theme-btn" onclick="setTheme('system')" id="theme-system">跟随系统</div>
+            <div class="theme-btn" onclick="setTheme('dark')" id="theme-dark">深色</div>
+        </div>
+
+        <label class="setting-row" style="cursor: pointer;">
+            <span style="font-size: 14px; font-weight: 600; color: var(--sub);">个性化调色</span>
+            <input type="color" id="color-picker" value="#d4af37" onchange="setAccentColor(this.value)" style="border:none; width:28px; height:28px; border-radius:50%; cursor:pointer; background:none; padding:0;">
+        </label>
+
+        <label class="setting-row" style="cursor: pointer;">
+            <span style="font-size: 14px; font-weight: 600; color: var(--sub);">用户名</span>
+            <input type="text" id="author-name-input" onchange="setAuthorName(this.value)" placeholder="未设置" style="border:none; background:transparent; text-align:right; font-size:14px; color:var(--text); font-weight:600; width: 120px; outline:none;">
+        </label>      
+        
+        <button class="btn-pill" style="display: flex; align-items: center; gap: 12px;" onclick="showPwdModal()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">修改访问密码</span>
+        </button>
+
+        <button class="btn-pill" style="display: flex; align-items: center; gap: 12px;" onclick="exportJSON()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">备份纯文本 (.json)</span>
+        </button>
+
+        <button class="btn-pill" style="display: flex; align-items: center; gap: 12px;" onclick="document.getElementById('file-i').click()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">恢复纯文本 (.json)</span>
+        </button>
+        <input type="file" id="file-i" accept=".json" style="display:none" onchange="importJSON(this)">
+        
+        <button class="btn-pill" style="color:var(--danger); display: flex; align-items: center; gap: 12px; margin-top: 15px;" onclick="clearAllData()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">摧毁本地记录</span>
+        </button>
+    </div>
+</div>
+
+<div id="mood-modal" class="modal" onclick="closeModal('mood-modal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div id="mood-grid-main"></div>
+        <div style="display:flex; gap:12px; margin-bottom: 25px;">
+            <input type="text" id="custom-mood-i" placeholder="自定义心情..." style="flex:1; border:none; background:var(--mood-bg); border-radius:14px; font-size:13px; height: 44px; padding: 0 15px; outline:none; color:var(--text);">
+            <button class="btn-pill btn-save" onclick="addTransientMood()" style="height: 44px !important; margin: 0 !important; border-radius: 14px !important; width: 80px !important; flex-shrink: 0 !important;">添加</button>
+        </div>
+        <button class="btn-pill" style="width:100%; padding: 0; height: 48px !important; border-radius: 14px !important; font-size: 15px !important;" onclick="closeModal('mood-modal')">确定</button>
+    </div>
+</div>
+
+<div id="pwd-modal" class="modal" onclick="closeModal('pwd-modal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3 style="font-weight: 300; margin-top: 0; margin-bottom: 20px;">安全修改</h3>
+        <input type="password" id="old-pwd" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--mood-bg); margin-bottom:15px;" placeholder="旧密码">
+        <input type="password" id="new-pwd" style="width:100%; padding:14px; border-radius:12px; border:1px solid var(--mood-bg); margin-bottom:20px;" placeholder="新密码">
+        <button class="btn-pill btn-save" style="width:100%; padding: 14px;" onclick="updatePassword()">确认修改</button>
+    </div>
+</div>
+
+<div id="card-modal" class="modal" onclick="closeModal('card-modal')">
+    <div class="modal-content" style="background: transparent; box-shadow: none; display: flex; flex-direction: column; align-items: center;" onclick="event.stopPropagation()">
+        <canvas id="card-canvas" style="width: 100%; max-width: 340px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.3);"></canvas>
+        <button class="btn-pill btn-save" style="margin-top: 25px; padding: 14px 40px; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onclick="downloadCard()">保存高清大图</button>
+    </div>
+</div>
+
+<div id="more-modal" class="modal" onclick="closeModal('more-modal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="width: 40px; height: 4px; background: var(--mood-bg); border-radius: 2px; margin: 0 auto 20px;"></div>
+        <button class="btn-pill" style="display:flex; align-items:center; gap:12px;" onclick="closeModal('more-modal'); generateCard()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">生成分享卡片</span>
+        </button>
+        <button class="btn-pill" style="display:flex; align-items:center; gap:12px;" onclick="closeModal('more-modal'); window.print()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">导出长文 PDF</span>
+        </button>
+        <div style="height: 1px; background: rgba(0,0,0,0.05); margin: 15px 0;"></div>
+        <button class="btn-pill" style="color:var(--danger); display:flex; align-items:center; gap:12px;" onclick="closeModal('more-modal'); doDel()">
+            <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">销毁此篇记录</span>
+        </button>
+    </div>
+</div>
+<script>
+if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' && location.protocol !== 'file:') {
+    window.console.log = function() {}; window.console.warn = function() {}; window.console.error = function() {}; window.console.info = function() {};
+}
+// 强制关闭浏览器自带的历史滚动恢复，由我们手动接管，防止闪跳
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+// ==========================================
+// [重构] 系统嗅探引擎：基于特征检测的精准物理设备识别
+// ==========================================
+const ua = window.navigator.userAgent.toLowerCase();
+const isIOS = /iphone|ipad|ipod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isAndroid = /android/.test(ua);
+let deviceClass = 'desktop-device'; 
+if (isIOS) deviceClass = 'ios-device';
+else if (isAndroid) deviceClass = 'android-device';
+document.documentElement.classList.add(deviceClass);
+document.body.classList.add(deviceClass);
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {}).catch(err => {});
+}
+// ==========================================
+// [重构] 工业级端到端加密引擎 (Web Crypto API)
+// ==========================================
+const CryptoSvc = {
+    key: null, 
+    salt: new TextEncoder().encode('ShiXu_Inner_Peace_2024'), // 固定盐值
+
+    async deriveKey(password) {
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            "raw", enc.encode(password), {name: "PBKDF2"}, false, ["deriveKey"]
+        );
+        this.key = await crypto.subtle.deriveKey(
+            {name: "PBKDF2", salt: this.salt, iterations: 100000, hash: "SHA-256"},
+            keyMaterial, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]
+        );
+    },
+
+    async encrypt(text) {
+        if (!this.key || !text) return text;
+        try {
+            const iv = crypto.getRandomValues(new Uint8Array(12)); 
+            const encodedText = new TextEncoder().encode(text);
+            const cipherBuffer = await crypto.subtle.encrypt({name: "AES-GCM", iv}, this.key, encodedText);
+            return this.buf2hex(iv) + ':' + this.buf2hex(cipherBuffer);
+        } catch(e) { return text; }
+    },
+
+    async decrypt(cipherHex) {
+        // 平滑兼容策略：如果没有冒号，说明是旧版明文数据，直接返回
+        if (!this.key || !cipherHex || typeof cipherHex !== 'string' || !cipherHex.includes(':')) return cipherHex;
+        try {
+            const [ivHex, dataHex] = cipherHex.split(':');
+            const iv = this.hex2buf(ivHex);
+            const data = this.hex2buf(dataHex);
+            const plainBuffer = await crypto.subtle.decrypt({name: "AES-GCM", iv}, this.key, data);
+            return new TextDecoder().decode(plainBuffer);
+        } catch (e) {
+            return "【解密失败：数据可能损坏或密码变更】";
+        }
+    },
+
+    buf2hex: (buffer) => Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join(''),
+    hex2buf: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)))
+};
+const dbSvc = {
+    get: (key) => new Promise((resolve, reject) => {
+        const req = db.transaction("notes", "readonly").objectStore("notes").get(key);
+        req.onsuccess = async e => {
+            const res = e.target.result;
+            // 读取时拦截：静默解密
+            if (res) {
+                if (res.title) res.title = await CryptoSvc.decrypt(res.title);
+                if (res.content) res.content = await CryptoSvc.decrypt(res.content);
+            }
+            resolve(res);
+        }; 
+        req.onerror = e => reject(e.target.error);
+    }),
+    put: async (data) => {
+        // 写入时拦截：克隆一份数据，将明文替换为 AES 密文
+        const encryptedData = { ...data };
+        if (data.title) encryptedData.title = await CryptoSvc.encrypt(data.title);
+        if (data.content) encryptedData.content = await CryptoSvc.encrypt(data.content);
+        
+        return new Promise((resolve, reject) => {
+            const req = db.transaction("notes", "readwrite").objectStore("notes").put(encryptedData);
+            req.onsuccess = () => resolve(); req.onerror = e => reject(e.target.error);
+        });
+    },
+    delete: (key) => new Promise((resolve, reject) => {
+        const req = db.transaction("notes", "readwrite").objectStore("notes").delete(key);
+        req.onsuccess = () => resolve(); req.onerror = e => reject(e.target.error);
+    }),
+    clear: () => new Promise((resolve, reject) => {
+        const req = db.transaction("notes", "readwrite").objectStore("notes").clear();
+        req.onsuccess = () => resolve(); req.onerror = e => reject(e.target.error);
+    }),
+    getMetaForSync: () => new Promise((resolve, reject) => {
+        const result = []; const req = db.transaction("notes", "readonly").objectStore("notes").openCursor();
+        req.onsuccess = e => {
+            const cursor = e.target.result;
+            if (cursor) { result.push({ date: cursor.value.date, mood: cursor.value.mood, words: cursor.value.words }); cursor.continue(); } 
+            else resolve(result);
+        };
+        req.onerror = e => reject(e.target.error);
+    }),
+    getDataForSearch: () => new Promise((resolve, reject) => {
+        const result = []; const req = db.transaction("notes", "readonly").objectStore("notes").openCursor();
+        req.onsuccess = async e => {
+            const cursor = e.target.result;
+            if (cursor) { 
+                // 搜索时必须解密内容才能被用户查找到
+                const t = await CryptoSvc.decrypt(cursor.value.title || '');
+                const c = await CryptoSvc.decrypt(cursor.value.content || '');
+                result.push({ d: cursor.value.date, t: t, c: c }); 
+                cursor.continue(); 
+            } 
+            else resolve(result);
+        };
+        req.onerror = e => reject(e.target.error);
+    })
+};
+
+function showToast(msg, type = 'info', duration = 3000) {
+    const container = $('toast-container'); if (!container) return;
+    const toast = document.createElement('div'); toast.className = `toast t-${type}`; toast.innerText = msg; container.appendChild(toast);
+    if (container.children.length > 5) container.children[0].remove();
+    setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 300); }, duration);
+}
+
+let db, searchWorker;
+let lastActiveTime = Date.now(), curMonth = new Date(), curKey = '';
+let dataMap = new Map(); 
+let activeMoods = [], autoSaveTimer = null;
+const PWD_KEY = 'ShiXu_PWD_V2', DB_NAME = 'ShiXu_DB';
+// [重构] 视觉重心统一的莫兰迪气象局
+const MOOD_DEFAULTS = ['✦ 澄明', '〰 涟漪', '○ 留白', '꩜ 混沌', '◭ 释然'];
+const moodFamilies = { '✦ 澄明': 'f-energy', '〰 涟漪': 'f-thinking', '○ 留白': 'f-healing', '꩜ 混沌': 'f-melancholy', '◭ 释然': 'f-release' };
+// 微调澄明(暖沙黄)与释然(陶土红)的色值，使其更具高级灰度
+const colorMap = { 'f-energy': '220, 199, 142', 'f-healing': '157, 176, 163', 'f-thinking': '92, 122, 153', 'f-melancholy': '138, 136, 148', 'f-release': '184, 115, 107', 'f-custom': '163, 160, 152' };
+const $ = (id) => document.getElementById(id);
+
+let lockedScrollY = 0; 
+// 替换原有的 openModal
+function openModal(id) {
+    if (document.activeElement) document.activeElement.blur(); 
+    const modal = document.getElementById(id);
+    
+    if (!document.body.classList.contains('modal-open')) {
+        lockedScrollY = window.scrollY || document.documentElement.scrollTop;
+        document.body.style.setProperty('position', 'fixed', 'important');
+        document.body.style.setProperty('width', '100%', 'important');
+        document.body.style.setProperty('height', '100dvh', 'important'); 
+        document.body.style.setProperty('top', `-${lockedScrollY}px`, 'important');
+        document.documentElement.classList.add('modal-open'); 
+        document.body.classList.add('modal-open'); 
+    }
+    
+    // 动画双步法：先赋予 display 占据空间，再赋予 opacity/transform 触发动画
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
+    });
+}
+
+// 替换原有的 closeModal
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.remove('show'); // 触发退出动画
+    
+    // 等待动画结束 (300ms) 后再隐藏 DOM
+    setTimeout(() => {
+        modal.style.display = 'none';
+        const anyModalOpen = Array.from(document.querySelectorAll('.modal')).some(m => m.classList.contains('show'));
+        
+        if (!anyModalOpen) {
+            document.body.style.removeProperty('position');
+            document.body.style.removeProperty('width');
+            document.body.style.removeProperty('height');
+            document.body.style.removeProperty('top');
+            window.scrollTo(0, lockedScrollY); 
+            document.documentElement.classList.remove('modal-open'); 
+            document.body.classList.remove('modal-open'); 
+        }
+    }, 300);
+}
+
+function setAuthorName(name) {
+    const finalName = (name || '').trim(); 
+    if (finalName) {
+        localStorage.setItem('ShiXu_Author', finalName);
+        if ($('app-main-title')) $('app-main-title').innerText = `${finalName}`;
+    } else {
+        localStorage.removeItem('ShiXu_Author');
+        if ($('app-main-title')) $('app-main-title').innerText = `点击右侧齿轮设置用户名 →`;
+    }
+    if ($('author-name-input')) $('author-name-input').value = finalName;
+}
+(function initSettings() { setAuthorName(localStorage.getItem('ShiXu_Author')); })();
+
+const syncChannel = new BroadcastChannel('shixu_sync_bus');
+syncChannel.onmessage = (event) => {
+    if (event.data.action === 'refresh') {
+        sync(); 
+        if (curKey === event.data.key) { const hint = $('save-hint'); hint.innerText = "冲突：其他窗口已更新此记录"; hint.style.color = "var(--danger)"; }
+    }
+};
+
+const workerCode = `self.onmessage = function(e) { if(e.data.action === 'search') { const { query, docs } = e.data; const q = query.toLowerCase(); const results = docs.filter(n => (n.t + n.c).toLowerCase().includes(q)).slice(0, 10); self.postMessage({ action: 'searchResult', results }); } };`;
+const workerBlob = new Blob([workerCode], {type: 'application/javascript'}); searchWorker = new Worker(URL.createObjectURL(workerBlob));
+searchWorker.onmessage = (e) => { if(e.data.action === 'searchResult') renderSearchResults(e.data.results); };
+
+function setTheme(theme) {
+    const updateDOM = () => {
+        document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('ShiXu_Theme_Pro', theme); 
+        ['light', 'system', 'dark'].forEach(t => $(`theme-${t}`).classList.remove('active')); $(`theme-${theme}`).classList.add('active');
+        const metaTheme = $('theme-color-meta');
+        if (metaTheme) {
+            if (theme === 'system') { const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches; metaTheme.setAttribute('content', isSystemDark ? '#121212' : '#f8f9fa'); } 
+            else { metaTheme.setAttribute('content', theme === 'dark' ? '#121212' : '#f8f9fa'); }
+        }
+    };
+    if (!document.startViewTransition) { updateDOM(); return; } document.startViewTransition(() => updateDOM());
+}
+function setAccentColor(hexColor) { if (!hexColor) return; document.documentElement.style.setProperty('--accent', hexColor); localStorage.setItem('ShiXu_Accent_Pro', hexColor); if ($('color-picker')) $('color-picker').value = hexColor; }
+(function initTheme() { setTheme(localStorage.getItem('ShiXu_Theme_Pro') || 'system'); const savedAccent = localStorage.getItem('ShiXu_Accent_Pro'); if (savedAccent) setAccentColor(savedAccent); })();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (localStorage.getItem('ShiXu_Theme_Pro') === 'system') { const metaTheme = $('theme-color-meta'); if (metaTheme) metaTheme.setAttribute('content', e.matches ? '#121212' : '#f8f9fa'); }
+});
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('btn-install-pwa').style.display = 'block'; });
+$('btn-install-pwa').addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; if (outcome === 'accepted') $('btn-install-pwa').style.display = 'none'; deferredPrompt = null; } });
+window.addEventListener('appinstalled', () => { $('btn-install-pwa').style.display = 'none'; requestPersistentStorage(); });
+
+async function requestPersistentStorage() {
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const statusEl = $('storage-status');
+    let granted = false;
+    try { if (navigator.storage && navigator.storage.persist) { granted = await navigator.storage.persisted(); if (!granted) granted = await navigator.storage.persist(); } } catch (e) {}
+    if (isStandalone) return; 
+    statusEl.style.display = 'block';
+    if (granted) { statusEl.innerText = "已激活长期存储 (但仍在浏览器中运行)"; statusEl.style.color = "var(--healing)"; } 
+    else { statusEl.innerText = "常规缓存模式 (极易被系统清理，请添加至桌面)"; statusEl.style.color = "var(--danger)"; }
+}
+
+function initEnvironmentGuard() {
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const installBtn = $('btn-install-pwa');
+
+    if (isStandalone) {
+        const statusEl = $('storage-status');
+        if (statusEl) { statusEl.innerText = "已激活本地独立存储引擎"; statusEl.style.color = "var(--healing)"; statusEl.style.display = 'block'; }
+        return; 
+    }
+    if (isIOS) {
+        const banner = $('ios-survival-banner'); if (banner) banner.style.display = 'flex';
+        if (installBtn) {
+            installBtn.style.display = 'flex'; installBtn.style.alignItems = 'center'; installBtn.style.justifyContent = 'center';
+            installBtn.innerHTML = `<svg style="width:18px; height:18px; margin-right:8px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>必须添加到主屏幕以防丢失`;
+            installBtn.style.background = "var(--danger)"; installBtn.style.color = "#fff";
+            installBtn.onclick = () => showToast("请点击 Safari 底部中间的『分享』图标，向上滑动找到『添加到主屏幕』！", "error", 4000);
+        }
+    } else if (isAndroid) {
+        if (installBtn) {
+            installBtn.style.display = 'flex'; installBtn.style.alignItems = 'center'; installBtn.style.justifyContent = 'center';
+            installBtn.innerHTML = `<svg style="width:18px; height:18px; margin-right:8px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>生成桌面 App (防误删)`;
+            installBtn.style.background = "var(--primary)"; installBtn.style.color = "var(--bg)";
+        }
+    }
+}
+
+function checkBackupStatus() {
+    const lastBackupStr = localStorage.getItem('ShiXu_Last_Backup');
+    if (lastBackupStr) {
+        const daysSinceBackup = (Date.now() - parseInt(lastBackupStr)) / (1000 * 60 * 60 * 24);
+        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+        if (daysSinceBackup > 5 && !isStandalone) { showToast(`⚠️ 距上次备份已过 ${Math.floor(daysSinceBackup)} 天，您的数据随时可能被系统清理，请立即导出！`, "error", 5000); }
+    }
+}
+
+async function exportJSON() {
+    try {
+        const hint = $('storage-status'); 
+        hint.style.display = 'block';
+        hint.innerText = "正在解密并打包数据...";
+
+        const allData = [];
+        // 使用游标逐条解密
+        const req = db.transaction("notes", "readonly").objectStore("notes").openCursor();
+        await new Promise((resolve, reject) => {
+            req.onsuccess = e => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const record = cursor.value;
+                    // 解密标题和内容
+                    const plainRecord = { ...record };
+                    // 注意：CryptoSvc.decrypt 会处理旧版明文（无冒号）和加密数据
+                    Promise.all([
+                        CryptoSvc.decrypt(record.title),
+                        CryptoSvc.decrypt(record.content)
+                    ]).then(([titleDec, contentDec]) => {
+                        plainRecord.title = titleDec;
+                        plainRecord.content = contentDec;
+                        allData.push(plainRecord);
+                        cursor.continue();
+                    }).catch(err => {
+                        // 解密失败时保留原值（可能是明文）
+                        plainRecord.title = record.title;
+                        plainRecord.content = record.content;
+                        allData.push(plainRecord);
+                        cursor.continue();
+                    });
+                } else {
+                    resolve();
+                }
+            };
+            req.onerror = e => reject(e.target.error);
+        });
+
+        const dataStr = JSON.stringify(allData, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        saveAsSimple(blob, `Shixu_Backup_${new Date().toISOString().split('T')[0]}.json`);
+        
+        hint.innerText = "安全导出成功！(已解密为可读格式)";
+        hint.style.color = "var(--healing)";
+        localStorage.setItem('ShiXu_Last_Backup', Date.now().toString());
+        setTimeout(() => hint.style.display = 'none', 3000);
+    } catch(e) {
+        showToast("导出崩溃: " + e.message, "error");
+    }
+}
+
+function importJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (!confirm("恢复操作将覆盖现有冲突记录。是否继续？")) {
+        input.value = '';
+        return;
+    }
+
+    const r = new FileReader();
+    r.onload = async e => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!Array.isArray(data)) throw new Error("无效格式");
+
+            // 准备事务，批量写入
+            const tx = db.transaction("notes", "readwrite");
+            const store = tx.objectStore("notes");
+
+            // 对每条记录加密后写入
+            for (const record of data) {
+                const encryptedRecord = { ...record };
+                // 如果已经是加密格式（包含冒号），则不再加密（可能来自其他备份）
+                // 这里简单判断：如果 title 包含 ":" 且长度大于 32，视为已加密，直接写入
+                // 否则用当前密钥加密
+                if (record.title && !record.title.includes(':')) {
+                    encryptedRecord.title = await CryptoSvc.encrypt(record.title);
+                }
+                if (record.content && !record.content.includes(':')) {
+                    encryptedRecord.content = await CryptoSvc.encrypt(record.content);
+                }
+                // 移除 images 等无用字段
+                const { images, ...clean } = encryptedRecord;
+                store.put(clean);
+            }
+
+            tx.oncomplete = () => {
+                sync();
+                showToast("数据恢复成功！", "success");
+                closeModal('settings-modal');
+            };
+            tx.onerror = (e) => {
+                showToast("导入失败: 写入被系统拒绝 (可能空间不足)", "error");
+            };
+        } catch (err) {
+            showToast("导入失败: " + err.message, "error");
+        }
+    };
+    r.readAsText(file);
+    input.value = '';
+}
+
+function saveAsSimple(blob, fileName) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url); }
+
+let randomHistory = []; 
+function goRandom() {
+    const keys = Array.from(dataMap.keys()); if (keys.length === 0) { showToast("还没有任何记录可以漫步哦", "info"); return; }
+    const today = new Date(); const currY = today.getFullYear(), currM = today.getMonth() + 1, currD = today.getDate(), todayKey = `${currY}/${currM}/${currD}`;
+    let availableKeys = keys.filter(k => k !== todayKey && k !== curKey); if (availableKeys.length === 0) { showToast("过去还是一片空白，快去创造回忆吧", "info"); return; }
+    const yearlyKeys = [], monthlyKeys = []; 
+    availableKeys.forEach(k => { const [y, m, d] = k.split('/').map(Number); if (m === currM && d === currD && y !== currY) yearlyKeys.push(k); else if (d === currD && (m !== currM || y !== currY)) monthlyKeys.push(k); });
+    let targetKey = '';
+    if (yearlyKeys.length > 0) { targetKey = yearlyKeys[Math.floor(Math.random() * yearlyKeys.length)]; showToast(`时光机：回到了 ${targetKey.split('/')[0]} 年的今天`, "success"); } 
+    else if (monthlyKeys.length > 0) { targetKey = monthlyKeys[Math.floor(Math.random() * monthlyKeys.length)]; const targetMonth = targetKey.split('/')[1]; showToast(`时光机：回到了 ${targetMonth} 月的今天`, "success"); } 
+    else { let pool = availableKeys.filter(k => !randomHistory.includes(k)); if (pool.length === 0) { randomHistory = []; pool = availableKeys; } targetKey = pool[Math.floor(Math.random() * pool.length)]; randomHistory.push(targetKey); if (randomHistory.length > 10) randomHistory.shift(); showToast("随机坠入某段回忆", "info"); }
+    openNote(targetKey);
+}
+
+async function hashStr(str) { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''); }
+async function checkAuth() {
+    const input = $('pwd-i').value; 
+    if (!input) return;
+
+    try {
+        // 1. 探针：检查浏览器是否开放了密码学引擎 (针对 HTTP 环境被拦截的防御)
+        if (!window.crypto || !window.crypto.subtle) {
+            showToast("环境不安全 (需 HTTPS 协议)，加密引擎被浏览器拦截，无法解锁", "error", 5000);
+            return;
+        }
+
+        const stored = localStorage.getItem(PWD_KEY);
+        const hashedInput = await hashStr(input);
+        
+        // 2. 正常逻辑分发
+        if(!stored) { 
+            localStorage.setItem(PWD_KEY, hashedInput); 
+            await CryptoSvc.deriveKey(input); 
+            start(); 
+        } 
+        else if(hashedInput === stored) {
+            await CryptoSvc.deriveKey(input); 
+            start(); 
+        } 
+        else { 
+            showToast("密码错误", "error"); 
+            $('pwd-i').value=''; 
+        }
+    } catch (err) {
+        // 3. 兜底：哪怕发生未知崩溃，也要通过 UI 告诉用户，而不是装死
+        showToast("解锁程序异常: " + err.message, "error", 4000);
+        $('pwd-i').value='';
+    }
+}
+
+// ==========================================
+// [重构] 实用主义冷启动引擎 (操作手册)
+// ==========================================
+function start() {
+    $('auth-layer').style.display = 'none'; 
+    const req = indexedDB.open(DB_NAME, 2); 
+    
+    req.onupgradeneeded = e => { 
+        if (!e.target.result.objectStoreNames.contains("notes")) {
+            e.target.result.createObjectStore("notes", {keyPath: "date"}); 
+        }
+    };
+    
+    req.onsuccess = async e => { 
+        db = e.target.result; 
+        
+        const countReq = db.transaction("notes", "readonly").objectStore("notes").count();
+        countReq.onsuccess = async () => {
+            if (countReq.result === 0) {
+                const today = new Date();
+                const initKey = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+                
+                // 🌟 重构后的操作手册版文案
+                const manualText = "「拾绪」：一座无需联网的私人思维孤岛。\n\n【核心功能】\n1.🎨 一键生成带纸张噪点的莫兰迪金句卡片，支持 PDF 排版导出。\n2.🕰️ 时光漫游：特色随机漫步引擎，让你在某个深夜与过去的自己不期而遇。\n3.📊 情绪足迹：用色彩深浅记录笔耕不辍，绘制一整年的心灵热力图。\n4.🔒 绝对私密：无云端服务器，AES-256 硬件级加密死锁于本地。\n\n【⚠️ 重要安全须知】\n1. 密钥唯一：本应用采用 AES-256 硬件级加密。您的解锁密码是解开数据的唯一凭证，开发者无法找回。一旦遗忘密码，数据将永久损毁。\n2. 数据留存：在浏览器环境下（未添加到主屏幕），数据极易被手机系统作为缓存自动清理。请务必定期在设置中点击「备份纯文本」导出您的数据。\n\n阅读完毕后，可点击右上角「...」销毁此篇记录。";
+                
+                // 写入数据库
+                const encryptedTitle = await CryptoSvc.encrypt("拾绪：产品介绍与安全须知");
+                const encryptedContent = await CryptoSvc.encrypt(manualText);
+                
+                await new Promise((resolve, reject) => {
+					const request = db.transaction("notes", "readwrite").objectStore("notes").put({
+						date: initKey,
+						title: encryptedTitle,
+						content: encryptedContent,
+						mood: "✦ 澄明",
+						words: getWordCount(manualText)
+					});
+					request.onsuccess = () => resolve();
+					request.onerror = (e) => reject(e.target.error);
+				});
+            }
+            
+            sync(); 
+            initAutoLock(); 
+            initEnvironmentGuard(); 
+            requestPersistentStorage(); 
+        };
+    };
+}
+async function sync() {
+    try {
+        // 从数据库获取所有日记的元数据（日期、心情、字数）
+        const all = await dbSvc.getMetaForSync();
+        dataMap.clear();
+        let totalWords = 0;
+        const now = new Date();
+        const thisMonth = now.getMonth() + 1;
+        const thisYear = now.getFullYear();
+        let monthCount = 0;
+
+        all.forEach(n => {
+            dataMap.set(n.date, n);
+            totalWords += (n.words || 0);
+            const [y, m] = n.date.split('/').map(Number);
+            if (y === thisYear && m === thisMonth) monthCount++;
+        });
+
+        // 更新首页统计数字
+        $('s-total').innerText = all.length;
+        $('s-month').innerText = monthCount;
+        $('s-words').innerText = totalWords;
+        $('days-count').innerText = `${all.length} 天`;
+        if($('app-main-title')) $('app-main-title').innerText = localStorage.getItem('ShiXu_Author') || '拾起思绪的线条';
+
+        // 重新渲染日历和岁月书脊波形图
+        renderCal();
+        renderGrowth(all, curMonth.getFullYear());
+    } catch (err) {
+        showToast("数据同步失败: " + err.message, "error");
+    }
+}
+// ==========================================
+// [重构] 工业级安全文本渲染器 (免疫 XSS + 智能链接折叠)
+// ==========================================
+function renderSafeText(text) {
+    if (!text) return '';
+    
+    // 1. 绝对防御层：优先对实体字符进行转义，物理级剿灭所有 HTML 标签注入风险
+    let safeText = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+        
+    // 2. 智能嗅探层：识别 http/https 长链接，将其折叠为极简的胶囊链接
+    // 匹配规则：以 http 开启，直到遇到空白符或换行符为止
+    safeText = safeText.replace(/(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)/g, function(url) {
+        // 利用内联 SVG 和极简 CSS 打造一颗精致的“链接胶囊”
+        return `<a href="${url}" target="_blank" style="
+            display: inline-flex; 
+            align-items: center; 
+            gap: 4px; 
+            color: var(--accent); 
+            background: var(--mood-bg); 
+            padding: 2px 8px; 
+            border-radius: 6px; 
+            font-size: 14px; 
+            text-decoration: none; 
+            margin: 0 4px;
+            vertical-align: middle;
+            transition: 0.2s;
+        ">
+            <svg style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            网页链接
+        </a>`;
+    });
+    
+    return safeText;
+}
+
+function renderCal() {
+    const g = $('cal-g'); g.innerHTML = ''; const y = curMonth.getFullYear(), m = curMonth.getMonth(); $('cal-m-label').innerText = `${y}年 ${m+1}月`;
+    const offset = (new Date(y, m, 1).getDay() || 7) - 1, days = new Date(y, m+1, 0).getDate(); const frag = document.createDocumentFragment();
+    for(let i=0; i<offset; i++) frag.appendChild(document.createElement('div'));
+    const todayK = `${new Date().getFullYear()}/${new Date().getMonth()+1}/${new Date().getDate()}`;
+    for(let d=1; d<=days; d++) {
+        const k = `${y}/${m+1}/${d}`; let f = "", lunar = "";
+        if(typeof Solar !== 'undefined') { const l = Solar.fromDate(new Date(y, m, d)).getLunar(); f = l.getFestivals()[0] || l.getJieQi() || ""; lunar = l.getDayInChinese(); }
+        const el = document.createElement('div'); el.className = `day ${k === todayK ? 'is-today' : ''} ${dataMap.has(k) ? 'recorded' : ''}`;
+        el.innerHTML = `<span>${d}</span><span class="l" style="color:${f ? 'var(--danger)' : 'var(--sub)'}">${f || lunar}</span>`;
+        el.onclick = () => openNote(k); frag.appendChild(el);
+    }
+    g.appendChild(frag);
+}
+
+function renderGrowth(all, year) {
+    const grid = $('growth-grid'); grid.innerHTML = ''; const frag = document.createDocumentFragment();
+    all.filter(n => parseInt(n.date.split('/')[0]) === parseInt(year)).sort((a,b) => new Date(a.date.replace(/\//g, '-')) - new Date(b.date.replace(/\//g, '-'))).forEach(n => {
+        const cell = document.createElement('div'); const family = n.mood && n.mood.split(',').length ? (moodFamilies[n.mood.split(',')[0]] || 'f-custom') : 'f-custom'; const lv = n.words > 300 ? 'lv-3' : (n.words > 100 ? 'lv-2' : 'lv-1');
+        cell.className = `growth-cell ${family} ${lv}`; cell.style.backgroundColor = `rgba(${colorMap[family] || colorMap['f-custom']}, ${lv === 'lv-3' ? 1 : (lv === 'lv-2' ? 0.6 : 0.3)})`; frag.appendChild(cell);
+    });
+    grid.appendChild(frag);
+}
+
+let isTransitioning = false; // 防止重复切换
+
+window.addEventListener('hashchange', async () => {
+    if (isTransitioning) return;
+    const hash = window.location.hash;
+
+    // 无 hash，显示主页
+    if (!hash || hash === '#') {
+        if ($('d-page').classList.contains('active')) {
+            await transitionToHome();
+        }
+        return;
+    }
+
+    // 解析 view/edit
+    const match = hash.match(/^#(view|edit)\/(.+)$/);
+    if (!match) return;
+
+    const mode = match[1];
+    const key = match[2];
+    if (!key) return;
+
+    // 如果已经在详情页且是同一个 key，避免重复打开
+    if (curKey === key && $('d-page').style.display === 'block') {
+        if (mode === 'edit' && !window.location.hash.startsWith('#edit')) {
+            // 需要切换到编辑模式
+            await renderEdit(key);
+        } else if (mode === 'view' && window.location.hash.startsWith('#edit')) {
+            const d = await dbSvc.get(key);
+            if (d) renderView(d);
+            else window.location.hash = `#edit/${key}`;
+        }
+        return;
+    }
+
+    isTransitioning = true;
+    await transitionToDetail(key);
+    if (mode === 'edit') {
+        await renderEdit(key);
+    } else {
+        const d = await dbSvc.get(key);
+        if (d) renderView(d);
+        else window.location.hash = `#edit/${key}`;
+    }
+    isTransitioning = false;
+});
+
+async function transitionToDetail(key) {
+    const hp = $('h-page');
+    const dp = $('d-page');
+    
+    // 保存主页滚动位置
+    homeScrollY = window.scrollY || document.documentElement.scrollTop;
+    
+    // 设置详情页数据（日期显示等）
+    $('d-date-title').innerText = key.replace(/\//g, ' . ');
+    
+    // 切换显示
+    hp.style.display = 'none';
+    dp.style.display = 'block';
+    dp.classList.add('active');
+    dp.classList.remove('animate-out');
+    dp.classList.add('animate-in');
+    
+    // 强制滚动到顶部
+    dp.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.body.classList.add('native-scroll');
+}
+
+async function transitionToHome() {
+    const hp = $('h-page');
+    const dp = $('d-page');
+    
+    // 如果在编辑模式，先保存
+    if (window.location.hash.startsWith('#edit/') && autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+        await save(false);
+    }
+    
+    // 移除详情页样式
+    dp.classList.remove('active', 'animate-in');
+    dp.style.display = 'none';
+    hp.style.display = 'block';
+    
+    // 恢复主页滚动位置
+    window.scrollTo(0, homeScrollY);
+    document.body.classList.remove('native-scroll');
+    
+    // 清理编辑标记
+    document.documentElement.classList.remove('is-editing');
+    document.body.classList.remove('is-editing');
+    
+    // 刷新主页数据
+    await sync();
+}
+
+async function openNote(k) {
+    if (document.activeElement) document.activeElement.blur();
+    // 设置 hash，触发 hashchange 事件
+    window.location.hash = `#view/${k}`;
+}
+// ==========================================
+// [重构] 终极物理出栈引擎：兼顾 150ms 动画与历史记录的绝对干净
+// ==========================================
+function closePage() {
+    // 如果当前不在详情页，忽略
+    if (!window.location.hash || window.location.hash === '#') return;
+    // 直接回退历史（触发 hashchange）
+    window.history.back();
+}
+
+function switchToEdit() { if (curKey) window.location.hash = `#edit/${curKey}`; }
+
+// 新增全局变量，用于精准记忆主页滚动位置
+let homeScrollY = 0; 
+
+// 2. 注入了进场动画的渲染层
+async function executeOpenNoteUI(k) {
+    curKey = k; 
+    const dp = $('d-page'), hp = $('h-page');
+    $('d-date-title').innerText = k.replace(/\//g, ' . ');
+    if (!navigator.onLine) updateNetworkStatus(); 
+    
+    homeScrollY = window.scrollY || document.documentElement.scrollTop;
+
+    // 瞬间切换底层 DOM
+    hp.style.display = 'none';
+    dp.style.display = 'block'; 
+    dp.classList.add('active');   
+    
+    // 🌟 核心：每次进入都强制重新触发进场动画
+    dp.classList.remove('animate-in', 'animate-out'); 
+    void dp.offsetWidth; // 触发浏览器重绘 (Reflow)，重置动画状态
+    dp.classList.add('animate-in'); // 播放上浮淡入动画
+
+    window.scrollTo(0, 0); 
+    document.body.classList.add('native-scroll');
+}
+
+// 3. 保持绝对瞬切的清理层 (被动退场执行点)
+function executeClosePageUI() {
+    document.querySelectorAll('.modal').forEach(m => {
+        if (m.style.display === 'flex' || m.classList.contains('show')) closeModal(m.id);
+    });
+    
+    if (window.location.hash.startsWith('#edit/') && autoSaveTimer) {
+        clearTimeout(autoSaveTimer); autoSaveTimer = null; save(false); 
+    }
+
+    if (document.activeElement) document.activeElement.blur();
+    
+    document.body.classList.remove('native-scroll');
+    document.documentElement.classList.remove('is-editing');
+    document.body.classList.remove('is-editing'); 
+    
+    const dp = $('d-page'), hp = $('h-page'); 
+    
+    // 无论前面是否有动画，这里必须瞬间干净利落地切断 DOM
+    dp.classList.remove('active', 'animate-in', 'animate-out'); 
+    dp.style.display = 'none'; 
+    hp.style.display = 'block';
+    
+    window.scrollTo(0, homeScrollY);
+    sync(); 
+}
+
+function renderView(d) {
+	document.documentElement.classList.remove('is-editing'); document.body.classList.remove('is-editing'); 
+    $('v-box').style.display='block'; $('e-box').style.display='none'; $('v-tools').style.display='flex'; $('e-tools').style.display='none';
+    $('title-v').innerText = d.title || "无标题"; $('meta-v').innerText = `${d.mood?d.mood.replace(/,/g,' '):''} · ${d.words} 字`; $('content-v').innerHTML = renderSafeText(d.content);
+    const dp = $('d-page'); dp.style.overflowY = 'hidden'; void dp.offsetHeight; dp.style.overflowY = 'auto'; dp.scrollTop = 0; window.scrollTo(0, 0); 
+}
+
+async function renderEdit(k) {
+	document.documentElement.classList.add('is-editing'); document.body.classList.add('is-editing'); 
+    try {
+        const d = await dbSvc.get(k);
+        $('v-box').style.display='none'; $('e-box').style.display='block'; $('v-tools').style.display='none'; $('e-tools').style.display='flex'; 
+        $('e-title').value = d ? d.title : ''; $('e-title').style.height = 'auto'; 
+        requestAnimationFrame(() => { $('e-title').style.height = ($('e-title').scrollHeight) + 'px'; });
+        $('e-content').innerText = d ? d.content : ''; activeMoods = d && d.mood ? d.mood.split(',') : []; updateMoodDisplay();
+    } catch (err) { showToast("界面初始化异常，请重试", "error"); }
+}
+
+async function save(manual) {
+    const c = $('e-content').innerText;
+    const d = { date: curKey, title: $('e-title').value, content: c, mood: activeMoods.join(','), words: getWordCount(c) };
+    try {
+        await dbSvc.put(d); syncChannel.postMessage({ action: 'refresh', key: curKey });
+        if(manual) window.location.hash = `#view/${curKey}`; 
+        const hint = $('save-hint'); hint.innerText = "已保存 " + new Date().toLocaleTimeString().slice(0,5); setTimeout(() => hint.innerText = "", 2000);
+    } catch (err) { showToast("存储记录失败", "error"); }
+}
+
+async function doDel() { 
+    if(!confirm("确定要销毁这篇日记吗？(不可恢复)")) return;
+    try { await dbSvc.delete(curKey); syncChannel.postMessage({ action: 'refresh', key: curKey }); closePage(); } 
+    catch (err) { showToast("数据删除失败", "error"); }
+}
+
+const editor = $('e-content'); const titleInput = $('e-title');
+titleInput.addEventListener('input', function() {
+    this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
+    clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => window.location.hash.startsWith('#edit/') && save(false), 3000);
+});
+titleInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); $('e-content').focus(); } });
+editor.addEventListener('input', () => { clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => window.location.hash.startsWith('#edit/') && save(false), 3000); });
+
+async function executeSearch() {
+    const q = $('search-input').value; if (!q) { $('index-list').innerHTML = ''; return; }
+    try { const docs = await dbSvc.getDataForSearch(); searchWorker.postMessage({ action: 'search', query: q, docs }); } 
+    catch (err) { showToast("检索数据失败", "error"); }
+}
+function renderSearchResults(results) {
+    const list = $('index-list'); list.innerHTML = ''; const frag = document.createDocumentFragment();
+    results.forEach(n => {
+        const div = document.createElement('div'); div.style = "padding:15px; background:var(--card); margin-bottom:5px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px;";
+        div.innerHTML = `<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">${n.t || '无标题'}</span> <span style="opacity:0.4; font-weight:normal; flex-shrink: 0;">${n.d}</span>`;
+        div.onclick = () => openNote(n.d); frag.appendChild(div);
+    }); 
+    list.appendChild(frag);
+}
+const filterIndex = debounce(executeSearch, 300);
+function getWordCount(text) { const cn = text.match(/[\u4e00-\u9fa5]/g) || []; const en = text.match(/[a-zA-Z]{2,}/g) || []; return cn.length + en.length; }
+function debounce(func, delay) { let timer = null; return function(...args) { clearTimeout(timer); timer = setTimeout(() => func.apply(this, args), delay); }; }
+function moveMonth(n) { const g = $('cal-g'); g.classList.add('fade'); setTimeout(() => { curMonth.setMonth(curMonth.getMonth()+n); sync(); g.classList.remove('fade'); }, 150); }
+function goToday() { const g = $('cal-g'); g.classList.add('fade'); setTimeout(() => { curMonth = new Date(); sync(); g.classList.remove('fade'); }, 150); }
+function openMoodModal() { renderMoodModal(); openModal('mood-modal'); }
+function updateMoodDisplay() { 
+    // 占位符依然保持虚线圆，语义完美
+    $('mood-trigger-btn').innerText = activeMoods.length ? activeMoods.join(', ') : '◌ 选择心情...'; 
+}
+function showPwdModal() { openModal('pwd-modal'); closeModal('settings-modal'); }
+// ==========================================
+// [重构] 工业级密码更新与全局数据重加密引擎
+// ==========================================
+async function updatePassword() { 
+    const oldV = $('old-pwd').value, newV = $('new-pwd').value; 
+    const stored = localStorage.getItem(PWD_KEY);
+    const oldHashed = await hashStr(oldV);
+    
+    // 1. 验证旧身份
+    if(oldHashed !== stored) { 
+        showToast("旧密码验证失败", "error"); 
+        return; 
+    }
+    if (!newV || newV.length < 4) {
+        showToast("新密码不能少于 4 位", "error"); 
+        return; 
+    }
+
+    // 冻结 UI 提示（时间设置为 99999，直到执行完毕后手动清除）
+    showToast("正在重新加密本地数据，请勿关闭或刷新页面...", "info", 99999);
+
+    try {
+        // 2. 派生未来身份（新密钥），此时 CryptoSvc.key 依然是旧密钥
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            "raw", enc.encode(newV), {name: "PBKDF2"}, false, ["deriveKey"]
+        );
+        const newKey = await crypto.subtle.deriveKey(
+            {name: "PBKDF2", salt: CryptoSvc.salt, iterations: 100000, hash: "SHA-256"},
+            keyMaterial, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]
+        );
+
+        // 辅助引擎：使用指定的新密钥进行独立加密
+        const encryptWithNewKey = async (text) => {
+            if (!text) return text;
+            const iv = crypto.getRandomValues(new Uint8Array(12)); 
+            const encodedText = new TextEncoder().encode(text);
+            const cipherBuffer = await crypto.subtle.encrypt({name: "AES-GCM", iv}, newKey, encodedText);
+            return CryptoSvc.buf2hex(iv) + ':' + CryptoSvc.buf2hex(cipherBuffer);
+        };
+
+        // 3. 瞬间拉取所有数据的索引键 (规避 OOM)
+        const keys = await new Promise((resolve, reject) => {
+            const req = db.transaction("notes", "readonly").objectStore("notes").getAllKeys();
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror = e => reject(e.target.error);
+        });
+
+        // 4. 游击重加密战术 (避开 IDB 异步事务强制中断陷阱)
+        for (let k of keys) {
+            // dbSvc.get 会自动调用 CryptoSvc 的旧密钥，将数据解密为明文
+            const plainData = await dbSvc.get(k);
+            
+            if (plainData) {
+                // 在内存中用新密钥重新装填密文
+                const reEncryptedData = { ...plainData };
+                if (plainData.title) reEncryptedData.title = await encryptWithNewKey(plainData.title);
+                if (plainData.content) reEncryptedData.content = await encryptWithNewKey(plainData.content);
+                
+                // 绕过 dbSvc.put (因为其内部绑死的是旧密钥)，直接调用底层事务强制覆盖写入
+                await new Promise((resolve, reject) => {
+                    const req = db.transaction("notes", "readwrite").objectStore("notes").put(reEncryptedData);
+                    req.onsuccess = () => resolve(); 
+                    req.onerror = e => reject(e.target.error);
+                });
+            }
+        }
+
+        // 5. 跨越奇点：旧时代结束，新时代开启
+        const newHashed = await hashStr(newV);
+        localStorage.setItem(PWD_KEY, newHashed); 
+        CryptoSvc.key = newKey; // 核心引擎换上新密钥
+        
+        // 扫尾与 UI 恢复
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        showToast("密码修改成功，底层数据已全部重新加密！", "success"); 
+        closeModal('pwd-modal');
+        $('old-pwd').value = ''; $('new-pwd').value = '';
+
+    } catch (err) {
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        showToast("数据重加密异常: " + err.message, "error"); 
+    }
+}
+function renderMoodModal() {
+    const container = $('mood-grid-main'); container.innerHTML = '';
+    [...new Set([...MOOD_DEFAULTS, ...activeMoods])].forEach(m => {
+        const el = document.createElement('div'); el.className = `mood-tag ${moodFamilies[m] || 'f-custom'} ${activeMoods.includes(m) ? 'active' : ''}`;
+        el.innerText = m; el.onclick = () => { if(activeMoods.includes(m)) activeMoods = activeMoods.filter(x => x !== m); else if(activeMoods.length < 5) activeMoods.push(m); updateMoodDisplay(); renderMoodModal(); editor.dispatchEvent(new Event('input')); }; container.appendChild(el);
+    });
+}
+function addTransientMood() { 
+    let v = $('custom-mood-i').value.trim(); 
+    if(v) { 
+        // 用户如果没有输入符号，自动补上高级的空心星芒 ✧
+        if (!/^[^a-zA-Z0-9\u4e00-\u9fa5]/.test(v)) { 
+            v = '✧ ' + v; 
+        } 
+        activeMoods.push(v); 
+        $('custom-mood-i').value=''; 
+        updateMoodDisplay(); 
+        renderMoodModal(); 
+        save(false); 
+    } 
+}
+
+function initAutoLock() {
+    const debouncedActiveUpdate = debounce(() => { lastActiveTime = Date.now(); }, 1000);
+    ['mousedown', 'touchstart', 'keydown', 'scroll'].forEach(ev => window.addEventListener(ev, debouncedActiveUpdate, {passive: true}));
+    setInterval(() => { if (Date.now() - lastActiveTime > 5 * 60 * 1000) location.reload(); }, 10000);
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        if (window.location.hash.startsWith('#edit/')) {
+            if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+            save(false);
+        }
+    } else if (document.visibilityState === 'visible') { lastActiveTime = Date.now(); }
+});
+
+async function clearAllData() { 
+    if(!confirm("警告：此操作将清空本地所有的日记文本，不可逆转！是否继续？")) return;
+    try { await dbSvc.clear(); location.reload(); } catch(e) { showToast("清空异常: " + e.message, "error"); }
+}
+
+function updateNetworkStatus() {
+    const isOnline = navigator.onLine; const titleEl = $('d-date-title');
+    const offlineSvg = `<svg style="width:16px; height:16px; vertical-align:-3px; margin-right:6px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    if (!isOnline) {
+        showToast("已进入离线模式", "info");
+        if (titleEl && !titleEl.innerHTML.includes('<svg')) { titleEl.dataset.originalText = titleEl.innerText; titleEl.innerHTML = `${offlineSvg}<span style="opacity:0.7">离线</span> · ${titleEl.innerText}`; }
+    } else { if (titleEl && titleEl.dataset.originalText) { titleEl.innerText = titleEl.dataset.originalText; delete titleEl.dataset.originalText; } }
+}
+
+window.addEventListener('offline', updateNetworkStatus);
+window.addEventListener('online', () => { showToast("网络已恢复", "success"); updateNetworkStatus(); });
+window.addEventListener('DOMContentLoaded', updateNetworkStatus);
+
+async function generateCard() {
+    if (!curKey) return; const d = await dbSvc.get(curKey); if (!d) return;
+    openModal('card-modal'); const canvas = $('card-canvas'), ctx = canvas.getContext('2d');
+    const W = 1080, margin = 120, fontSize = 44, lineHeight = 84;
+    const authorName = localStorage.getItem('ShiXu_Author') || '未署名';
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgHex = isDark ? '#121212' : '#F5F4F0', textHex = isDark ? '#E8E8E8' : '#222222', subHex = isDark ? '#777777' : '#888888';
+    const accentHex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
+    const serifFont = '"Noto Serif SC", "Songti SC", STZhongsong, serif', sansFont = 'system-ui, -apple-system, sans-serif';
+
+    let rawText = d.content ? d.content.replace(/[*_~`#]/g, '') : (d.title || "记录当下"); rawText = rawText.trim();
+    if (rawText.length > 800) rawText = rawText.substring(0, 800) + '...';
+
+    ctx.font = `400 ${fontSize}px ${serifFont}`; const paragraphs = rawText.split('\n'); let lines = [];
+    paragraphs.forEach(p => {
+        let line = '';
+        for (let i = 0; i < p.length; i++) {
+            let testLine = line + p[i];
+            if (ctx.measureText(testLine).width > W - margin * 2 && i > 0) { lines.push(line); line = p[i]; } else { line = testLine; }
+        }
+        lines.push(line); lines.push('【PARAGRAPH_BREAK】');
+    });
+    if (lines[lines.length - 1] === '【PARAGRAPH_BREAK】') lines.pop();
+    const textTotalHeight = lines.reduce((acc, line) => acc + (line === '【PARAGRAPH_BREAK】' ? lineHeight * 0.5 : lineHeight), 0);
+    const textStartY = margin + 140, footerHeight = 240, H = Math.max(1440, textStartY + textTotalHeight + footerHeight);
+
+    canvas.width = W; canvas.height = H; ctx.fillStyle = bgHex; ctx.fillRect(0, 0, W, H);
+    const grainCanvas = document.createElement('canvas'); grainCanvas.width = 100; grainCanvas.height = 100; const gCtx = grainCanvas.getContext('2d');
+    for (let i = 0; i < 100; i += 2) { for (let j = 0; j < 100; j += 2) { if (Math.random() > 0.9) { gCtx.fillStyle = isDark ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.01)'; gCtx.fillRect(i, j, 2, 2); } } }
+    ctx.fillStyle = ctx.createPattern(grainCanvas, 'repeat'); ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = accentHex; ctx.fillRect(margin, margin, 80, 8);
+    ctx.fillStyle = accentHex; ctx.globalAlpha = isDark ? 0.15 : 0.08; ctx.font = `italic 240px ${serifFont}`; ctx.fillText('“', margin - 40, textStartY + 90); ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = textHex; ctx.font = `400 ${fontSize}px ${serifFont}`; ctx.textBaseline = 'top';
+    let currentY = textStartY;
+    lines.forEach(line => { if (line === '【PARAGRAPH_BREAK】') { currentY += lineHeight * 0.5; } else { ctx.fillText(line, margin, currentY); currentY += lineHeight; } });
+
+    const footerY = H - footerHeight + 100;
+    ctx.fillStyle = subHex; ctx.globalAlpha = 0.15; ctx.fillRect(margin, footerY - 50, W - margin * 2, 2); ctx.globalAlpha = 1.0;
+    ctx.fillStyle = textHex; ctx.font = `600 36px ${sansFont}`; ctx.fillText(authorName, margin, footerY);
+    ctx.fillStyle = subHex; ctx.font = `300 24px ${sansFont}`; ctx.fillText('拾绪', margin, footerY + 50); 
+    ctx.textAlign = 'right'; const displayMood = d.mood ? d.mood.split(',')[0] : '○ 留白';
+    ctx.fillStyle = textHex; ctx.font = `500 28px ${serifFont}`; ctx.fillText(displayMood, W - margin, footerY);
+    ctx.fillStyle = subHex; ctx.font = `300 24px ${sansFont}`; ctx.fillText(d.date.replace(/\//g, ' . '), W - margin, footerY + 50);
+    ctx.textAlign = 'left'; 
+}
+function downloadCard() {
+    const canvas = $('card-canvas'); canvas.toBlob(blob => { saveAsSimple(blob, `ShiXu_Card_${Date.now()}.png`); showToast("长图已生成并保存", "success"); closeModal('card-modal'); }, 'image/png');
+}
+</script>
+</body>
+</html>
