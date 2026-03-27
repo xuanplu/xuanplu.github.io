@@ -16,7 +16,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="./lunar.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js"></script>
 <style>
 :root { 
     --primary: #2c3e50; --accent: #d4af37; --bg: #f8f9fa; --card: #ffffff; --text: #2c3e50; 
@@ -181,7 +180,7 @@ html, body { height: 100%; width: 100%; margin: 0; padding: 0; background: var(-
 #mood-trigger-btn { user-select: none; -webkit-tap-highlight-color: transparent; }
 #mood-trigger-btn:active { transform: scale(0.92); opacity: 0.8; }
 
-.main-container { max-width: 650px; margin: 0 auto; padding: 15px 20px; }
+.main-container { max-width: 650px; margin: 0 auto; padding: 15px 20px;}
 ::selection { background-color: rgba(0, 0, 0, 0.12); }
 [data-theme="dark"] ::selection { background-color: rgba(255, 255, 255, 0.18); }
 
@@ -292,13 +291,8 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
         <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--sub); margin-bottom: 8px; font-weight: bold;"><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div></div>
         <div class="cal-grid" id="cal-g"></div>
     </div>
-
-    <div style="margin: 10px 15px; padding: 15px 18px; background: var(--card); border-radius: 20px; box-shadow: 0 5px 25px rgba(0,0,0,0.03);">
-        <div class="box-header"><span id="growth-title">心绪印记</span><span id="days-count">0 天</span></div>
-        <div class="growth-grid" id="growth-grid"></div>
-    </div>
-
-    <div style="margin: 10px 15px; padding-bottom: 20px;">
+	
+	<div style="margin: 10px 15px; padding-bottom: 1px;">
         <div style="display: flex; gap: 10px; align-items: center;">
             <input type="text" id="search-input" placeholder="搜索，或点击右侧漫游..." oninput="filterIndex()" style="flex: 1; padding: 15px; border-radius: 15px; border: none; background: var(--card); font-size: 14px; color: var(--text); outline: none;">
             
@@ -311,6 +305,11 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
         </div>
         <div id="index-list" style="margin-top:10px;"></div>
     </div>
+    <div style="margin: 10px 15px; padding: 15px 18px; background: var(--card); border-radius: 20px; box-shadow: 0 5px 25px rgba(0,0,0,0.03);">
+        <div class="box-header"><span id="growth-title">心绪印记</span><span id="days-count">0 天</span></div>
+        <div class="growth-grid" id="growth-grid"></div>
+    </div>
+
 </div>
 
 <div id="d-page">
@@ -647,7 +646,7 @@ function setAuthorName(name) {
         if ($('app-main-title')) $('app-main-title').innerText = `${finalName}`;
     } else {
         localStorage.removeItem('ShiXu_Author');
-        if ($('app-main-title')) $('app-main-title').innerText = `点击右侧齿轮设置用户名 →`;
+        if ($('app-main-title')) $('app-main-title').innerText = `点击右侧齿轮设置用户名`;
     }
     if ($('author-name-input')) $('author-name-input').value = finalName;
 }
@@ -736,53 +735,45 @@ function checkBackupStatus() {
 
 async function exportJSON() {
     try {
-        const hint = $('storage-status'); 
+        const hint = $('storage-status');
         hint.style.display = 'block';
         hint.innerText = "正在解密并打包数据...";
 
-        const allData = [];
-        // 使用游标逐条解密
-        const req = db.transaction("notes", "readonly").objectStore("notes").openCursor();
-        await new Promise((resolve, reject) => {
-            req.onsuccess = e => {
-                const cursor = e.target.result;
-                if (cursor) {
-                    const record = cursor.value;
-                    // 解密标题和内容
-                    const plainRecord = { ...record };
-                    // 注意：CryptoSvc.decrypt 会处理旧版明文（无冒号）和加密数据
-                    Promise.all([
-                        CryptoSvc.decrypt(record.title),
-                        CryptoSvc.decrypt(record.content)
-                    ]).then(([titleDec, contentDec]) => {
-                        plainRecord.title = titleDec;
-                        plainRecord.content = contentDec;
-                        allData.push(plainRecord);
-                        cursor.continue();
-                    }).catch(err => {
-                        // 解密失败时保留原值（可能是明文）
-                        plainRecord.title = record.title;
-                        plainRecord.content = record.content;
-                        allData.push(plainRecord);
-                        cursor.continue();
-                    });
-                } else {
-                    resolve();
-                }
-            };
+        // 1. 获取所有原始记录（密文）
+        const allCipher = await new Promise((resolve, reject) => {
+            const req = db.transaction("notes", "readonly").objectStore("notes").getAll();
+            req.onsuccess = e => resolve(e.target.result);
             req.onerror = e => reject(e.target.error);
         });
 
-        const dataStr = JSON.stringify(allData, null, 2);
-        const blob = new Blob([dataStr], {type: "application/json"});
+        // 2. 并发解密（使用 Promise.allSettled 避免单条失败中断）
+        const decryptPromises = allCipher.map(async (record) => {
+            const plainRecord = { ...record };
+            try {
+                plainRecord.title = await CryptoSvc.decrypt(record.title);
+                plainRecord.content = await CryptoSvc.decrypt(record.content);
+            } catch (err) {
+                // 解密失败时保留原值（可能是明文或损坏）
+                console.warn(`解密失败 ${record.date}:`, err);
+            }
+            // 移除 images 等无用字段
+            delete plainRecord.images;
+            return plainRecord;
+        });
+
+        const allPlain = await Promise.all(decryptPromises);
+        const dataStr = JSON.stringify(allPlain, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
         saveAsSimple(blob, `Shixu_Backup_${new Date().toISOString().split('T')[0]}.json`);
-        
-        hint.innerText = "安全导出成功！(已解密为可读格式)";
+
+        hint.innerText = "导出成功！";
         hint.style.color = "var(--healing)";
         localStorage.setItem('ShiXu_Last_Backup', Date.now().toString());
         setTimeout(() => hint.style.display = 'none', 3000);
-    } catch(e) {
+    } catch (e) {
         showToast("导出崩溃: " + e.message, "error");
+        const hint = $('storage-status');
+        if (hint) hint.style.display = 'none';
     }
 }
 
@@ -801,35 +792,36 @@ function importJSON(input) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) throw new Error("无效格式");
 
-            // 准备事务，批量写入
             const tx = db.transaction("notes", "readwrite");
             const store = tx.objectStore("notes");
+            const putPromises = [];
 
-            // 对每条记录加密后写入
             for (const record of data) {
                 const encryptedRecord = { ...record };
-                // 如果已经是加密格式（包含冒号），则不再加密（可能来自其他备份）
-                // 这里简单判断：如果 title 包含 ":" 且长度大于 32，视为已加密，直接写入
-                // 否则用当前密钥加密
-                if (record.title && !record.title.includes(':')) {
-                    encryptedRecord.title = await CryptoSvc.encrypt(record.title);
+                const isAlreadyEncrypted = typeof record.title === 'string' &&
+                                           record.title.includes(':') &&
+                                           record.title.length > 50;
+                if (!isAlreadyEncrypted) {
+                    if (record.title) encryptedRecord.title = await CryptoSvc.encrypt(record.title);
+                    if (record.content) encryptedRecord.content = await CryptoSvc.encrypt(record.content);
                 }
-                if (record.content && !record.content.includes(':')) {
-                    encryptedRecord.content = await CryptoSvc.encrypt(record.content);
-                }
-                // 移除 images 等无用字段
-                const { images, ...clean } = encryptedRecord;
-                store.put(clean);
+                delete encryptedRecord.images;
+                const request = store.put(encryptedRecord);
+                putPromises.push(new Promise((resolve, reject) => {
+                    request.onsuccess = resolve;
+                    request.onerror = reject;
+                }));
             }
 
-            tx.oncomplete = () => {
-                sync();
-                showToast("数据恢复成功！", "success");
-                closeModal('settings-modal');
-            };
-            tx.onerror = (e) => {
-                showToast("导入失败: 写入被系统拒绝 (可能空间不足)", "error");
-            };
+            await Promise.all(putPromises);
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = resolve;
+                tx.onerror = reject;
+            });
+
+            sync();
+            showToast("数据恢复成功！", "success");
+            closeModal('settings-modal');
         } catch (err) {
             showToast("导入失败: " + err.message, "error");
         }
@@ -838,7 +830,15 @@ function importJSON(input) {
     input.value = '';
 }
 
-function saveAsSimple(blob, fileName) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; a.click(); URL.revokeObjectURL(url); }
+// 独立定义 saveAsSimple（放在 importJSON 之后）
+function saveAsSimple(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+}
 
 let randomHistory = []; 
 function goRandom() {
@@ -931,8 +931,23 @@ function start() {
 					request.onerror = (e) => reject(e.target.error);
 				});
             }
+            // ✅ 新增：重置全局状态
+            curKey = '';
+            homeScrollY = 0;
+            dataMap.clear();
+            curMonth = new Date();
+            activeMoods = [];
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
             
-            sync(); 
+            // ✅ 清除历史记录，确保回到主页
+            if (window.location.hash && window.location.hash !== '#') {
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+                window.dispatchEvent(new Event('hashchange')); // 强制回到主页
+            } else {
+                // 如果已经在主页，直接刷新数据
+                await sync();
+            }
+            
             initAutoLock(); 
             initEnvironmentGuard(); 
             requestPersistentStorage(); 
@@ -962,7 +977,6 @@ async function sync() {
         $('s-month').innerText = monthCount;
         $('s-words').innerText = totalWords;
         $('days-count').innerText = `${all.length} 天`;
-        if($('app-main-title')) $('app-main-title').innerText = localStorage.getItem('ShiXu_Author') || '拾起思绪的线条';
 
         // 重新渲染日历和岁月书脊波形图
         renderCal();
@@ -1033,17 +1047,12 @@ function renderGrowth(all, year) {
     grid.appendChild(frag);
 }
 
-let isTransitioning = false; // 防止重复切换
-
 window.addEventListener('hashchange', async () => {
-    if (isTransitioning) return;
     const hash = window.location.hash;
 
-    // 无 hash，显示主页
+    // 无 hash 或只有 #，显示主页
     if (!hash || hash === '#') {
-        if ($('d-page').classList.contains('active')) {
-            await transitionToHome();
-        }
+        await transitionToHome();
         return;
     }
 
@@ -1055,59 +1064,54 @@ window.addEventListener('hashchange', async () => {
     const key = match[2];
     if (!key) return;
 
-    // 如果已经在详情页且是同一个 key，避免重复打开
-    if (curKey === key && $('d-page').style.display === 'block') {
-        if (mode === 'edit' && !window.location.hash.startsWith('#edit')) {
-            // 需要切换到编辑模式
-            await renderEdit(key);
-        } else if (mode === 'view' && window.location.hash.startsWith('#edit')) {
-            const d = await dbSvc.get(key);
-            if (d) renderView(d);
-            else window.location.hash = `#edit/${key}`;
-        }
-        return;
+    // 更新全局 curKey 和日期标题
+    curKey = key;
+    $('d-date-title').innerText = key.replace(/\//g, ' . ');
+
+    // 确保详情页显示
+    if ($('h-page').style.display !== 'none') {
+        await transitionToDetail();
     }
 
-    isTransitioning = true;
-    await transitionToDetail(key);
+    // 根据模式渲染
     if (mode === 'edit') {
         await renderEdit(key);
-    } else {
+    } else { // view
         const d = await dbSvc.get(key);
-        if (d) renderView(d);
-        else window.location.hash = `#edit/${key}`;
+        if (d) {
+            renderView(d);
+        } else {
+            // 没有记录，替换当前 hash 为 edit 模式，不新增历史
+            history.replaceState(null, '', `#edit/${key}`);
+            // 重新触发 hashchange 以应用编辑模式
+            window.dispatchEvent(new Event('hashchange'));
+        }
     }
-    isTransitioning = false;
 });
 
-async function transitionToDetail(key) {
-    const hp = $('h-page');
+async function transitionToDetail() {
+	const hp = $('h-page');
     const dp = $('d-page');
-    
+
     // 保存主页滚动位置
     homeScrollY = window.scrollY || document.documentElement.scrollTop;
-    
-    // 设置详情页数据（日期显示等）
-    $('d-date-title').innerText = key.replace(/\//g, ' . ');
-    
-    // 切换显示
+
     hp.style.display = 'none';
     dp.style.display = 'block';
     dp.classList.add('active');
-    dp.classList.remove('animate-out');
-    dp.classList.add('animate-in');
-    
+
     // 强制滚动到顶部
     dp.scrollTop = 0;
     window.scrollTo(0, 0);
     document.body.classList.add('native-scroll');
 }
 
+
 async function transitionToHome() {
     const hp = $('h-page');
     const dp = $('d-page');
     
-    // 如果在编辑模式，先保存
+    // 如果在编辑模式，先保存（双重保险）
     if (window.location.hash.startsWith('#edit/') && autoSaveTimer) {
         clearTimeout(autoSaveTimer);
         autoSaveTimer = null;
@@ -1133,79 +1137,41 @@ async function transitionToHome() {
 
 async function openNote(k) {
     if (document.activeElement) document.activeElement.blur();
-    // 设置 hash，触发 hashchange 事件
-    window.location.hash = `#view/${k}`;
+    const d = await dbSvc.get(k);
+    // 直接设置 hash，避免先 view 后重定向
+    window.location.hash = d ? `#view/${k}` : `#edit/${k}`;
 }
 // ==========================================
 // [重构] 终极物理出栈引擎：兼顾 150ms 动画与历史记录的绝对干净
 // ==========================================
 function closePage() {
-    // 如果当前不在详情页，忽略
     if (!window.location.hash || window.location.hash === '#') return;
-    // 直接回退历史（触发 hashchange）
-    window.history.back();
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        // 无历史记录时直接回到主页
+        window.location.hash = '';
+    }
 }
 
-function switchToEdit() { if (curKey) window.location.hash = `#edit/${curKey}`; }
+function switchToEdit() {
+    if (curKey) {
+        const newHash = `#edit/${curKey}`;
+        if (window.location.hash !== newHash) {
+            history.replaceState(null, '', newHash);
+            window.dispatchEvent(new Event('hashchange'));
+        }
+    }
+}
 
 // 新增全局变量，用于精准记忆主页滚动位置
 let homeScrollY = 0; 
-
-// 2. 注入了进场动画的渲染层
-async function executeOpenNoteUI(k) {
-    curKey = k; 
-    const dp = $('d-page'), hp = $('h-page');
-    $('d-date-title').innerText = k.replace(/\//g, ' . ');
-    if (!navigator.onLine) updateNetworkStatus(); 
-    
-    homeScrollY = window.scrollY || document.documentElement.scrollTop;
-
-    // 瞬间切换底层 DOM
-    hp.style.display = 'none';
-    dp.style.display = 'block'; 
-    dp.classList.add('active');   
-    
-    // 🌟 核心：每次进入都强制重新触发进场动画
-    dp.classList.remove('animate-in', 'animate-out'); 
-    void dp.offsetWidth; // 触发浏览器重绘 (Reflow)，重置动画状态
-    dp.classList.add('animate-in'); // 播放上浮淡入动画
-
-    window.scrollTo(0, 0); 
-    document.body.classList.add('native-scroll');
-}
-
-// 3. 保持绝对瞬切的清理层 (被动退场执行点)
-function executeClosePageUI() {
-    document.querySelectorAll('.modal').forEach(m => {
-        if (m.style.display === 'flex' || m.classList.contains('show')) closeModal(m.id);
-    });
-    
-    if (window.location.hash.startsWith('#edit/') && autoSaveTimer) {
-        clearTimeout(autoSaveTimer); autoSaveTimer = null; save(false); 
-    }
-
-    if (document.activeElement) document.activeElement.blur();
-    
-    document.body.classList.remove('native-scroll');
-    document.documentElement.classList.remove('is-editing');
-    document.body.classList.remove('is-editing'); 
-    
-    const dp = $('d-page'), hp = $('h-page'); 
-    
-    // 无论前面是否有动画，这里必须瞬间干净利落地切断 DOM
-    dp.classList.remove('active', 'animate-in', 'animate-out'); 
-    dp.style.display = 'none'; 
-    hp.style.display = 'block';
-    
-    window.scrollTo(0, homeScrollY);
-    sync(); 
-}
 
 function renderView(d) {
 	document.documentElement.classList.remove('is-editing'); document.body.classList.remove('is-editing'); 
     $('v-box').style.display='block'; $('e-box').style.display='none'; $('v-tools').style.display='flex'; $('e-tools').style.display='none';
     $('title-v').innerText = d.title || "无标题"; $('meta-v').innerText = `${d.mood?d.mood.replace(/,/g,' '):''} · ${d.words} 字`; $('content-v').innerHTML = renderSafeText(d.content);
-    const dp = $('d-page'); dp.style.overflowY = 'hidden'; void dp.offsetHeight; dp.style.overflowY = 'auto'; dp.scrollTop = 0; window.scrollTo(0, 0); 
+    const dp = $('d-page'); dp.style.overflowY = 'hidden'; void dp.offsetHeight; dp.style.overflowY = 'auto';
 }
 
 async function renderEdit(k) {
@@ -1221,12 +1187,29 @@ async function renderEdit(k) {
 
 async function save(manual) {
     const c = $('e-content').innerText;
-    const d = { date: curKey, title: $('e-title').value, content: c, mood: activeMoods.join(','), words: getWordCount(c) };
+    const d = {
+        date: curKey,
+        title: $('e-title').value,
+        content: c,
+        mood: activeMoods.join(','),
+        words: getWordCount(c)
+    };
     try {
-        await dbSvc.put(d); syncChannel.postMessage({ action: 'refresh', key: curKey });
-        if(manual) window.location.hash = `#view/${curKey}`; 
-        const hint = $('save-hint'); hint.innerText = "已保存 " + new Date().toLocaleTimeString().slice(0,5); setTimeout(() => hint.innerText = "", 2000);
-    } catch (err) { showToast("存储记录失败", "error"); }
+        await dbSvc.put(d);
+        syncChannel.postMessage({ action: 'refresh', key: curKey });
+        const hint = $('save-hint');
+        hint.innerText = "已保存 " + new Date().toLocaleTimeString().slice(0,5);
+        setTimeout(() => hint.innerText = "", 2000);
+        if (manual) {
+			const newHash = `#view/${curKey}`;
+			if (window.location.hash !== newHash) {
+				history.replaceState(null, '', newHash);
+				window.dispatchEvent(new Event('hashchange'));
+			}
+		}
+    } catch (err) {
+        showToast("存储记录失败", "error");
+    }
 }
 
 async function doDel() { 
