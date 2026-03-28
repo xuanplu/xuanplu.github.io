@@ -3,7 +3,7 @@
 // ==========================================
 
 // 每次发布新版本静态资源时，请修改这里的版本号 (如 v1.0.1)
-const CACHE_NAME = 'shixu-basic-cache-v3.0.3'; 
+const CACHE_NAME = 'shixu-basic-cache-v3.0.4'; 
 
 // 基础版极其轻量，只有 4 个核心资源
 const ASSETS_TO_CACHE = [
