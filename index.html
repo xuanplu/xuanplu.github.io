@@ -5,238 +5,867 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#f8f9fa" id="theme-color-meta">
-<meta name="description" content="拾绪 - 一款纯粹的 Local-first 本地私密日记本。端到端硬件级加密，数据完全掌握在自己手中。">
-<meta property="og:title" content="「拾绪」：一座无需联网的私人思维孤岛。">
-<meta property="og:description" content="零服务器、不连外网、AES-GCM 加密。你的思绪，仅对你可见。">
+<meta name="description" content="本地私密日记本。AES-256 加密，数据仅存于设备，无需联网。">
+<meta property="og:title" content="拾绪">
+<meta property="og:description" content="零服务器，AES-256 加密，完全本地存储。免费。">
 <meta property="og:image" content="shixu.png">
-<meta property="og:type" content="website">
 <title>拾绪</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="shixu.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes"> <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="./lunar.js"></script>
+<script src="./lunar.js" onerror="loadFallbackLunar()"></script>
+<script>
+function loadFallbackLunar() {
+    var script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js";
+    script.onload = function() {
+        console.log("CDN lunar.js 加载成功");
+        // 如果页面依赖 lunar 渲染日历，可以在这里重新触发渲染
+        if (typeof renderCal === 'function') renderCal();
+    };
+    document.head.appendChild(script);
+}
+</script>
 <style>
-:root { 
-    --primary: #2c3e50; --accent: #d4af37; --bg: #f8f9fa; --card: #ffffff; --text: #2c3e50; 
-    --danger: #e74c3c; --sub: #525c68; --mood-bg: #e9ecef;
-    --nav-height: 48px; 
-    /* 拾绪·内观 专属莫兰迪色卡 */
-    --energy: 212, 175, 55; --healing: 157, 176, 163; --thinking: 92, 122, 153;
-    --release: 194, 107, 99; --melancholy: 138, 136, 148; --custom: 163, 160, 152;
+/* ============================================================
+   1. 核心变量 (CSS Variables)
+   ============================================================ */
+:root {
+    --primary: #2c3e50;
+    --accent: #d4af37;
+    --bg: #f8f9fa;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --danger: #e74c3c;
+    --sub: #525c68;
+    --mood-bg: #e9ecef;
+    --nav-height: 48px;
+    --energy: 212, 175, 55;
+    --healing: 157, 176, 163;
+    --thinking: 92, 122, 153;
+    --release: 194, 107, 99;
+    --melancholy: 138, 136, 148;
+    --custom: 163, 160, 152;
 }
-[data-theme="dark"] { --primary: #ecf0f1; --accent: #f1c40f; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --mood-bg: #2c2c2c;}
+
+/* 深色模式主题覆盖 */
+[data-theme="dark"] {
+    --primary: #ecf0f1;
+    --accent: #f1c40f;
+    --bg: #121212;
+    --card: #1e1e1e;
+    --text: #e0e0e0;
+    --mood-bg: #2c2c2c;
+}
+
+/* 跟随系统深色模式 */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --primary: #ecf0f1; --accent: #f1c40f; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; --mood-bg: #2c2c2c;}
+    :root:not([data-theme="light"]) {
+        --primary: #ecf0f1;
+        --accent: #f1c40f;
+        --bg: #121212;
+        --card: #1e1e1e;
+        --text: #e0e0e0;
+        --mood-bg: #2c2c2c;
+    }
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
-html, body { height: 100%; width: 100%; margin: 0; padding: 0; background: var(--bg); font-family: -apple-system, system-ui, sans-serif; color: var(--text); overflow-x: hidden; transition: background 0.3s; }
-/* 彻底移除页面级过渡动画，全面让权给 iOS 的原生侧滑 Snapshot */
-.page, #d-page { transition: none; }
-#d-page { 
-    display: none; 
-    position: fixed; 
-    inset: 0; 
-    width: 100%; 
-    height: 100dvh; 
-    min-height: -webkit-fill-available;
-    background: var(--bg); 
-    z-index: 100; 
-    opacity: 0; 
-    padding-top: env(safe-area-inset-top); 
-    overflow-y: auto; 
+/* ============================================================
+   2. 全局重置 (Global Reset)
+   ============================================================ */
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: #fff0;
+    outline: none;
+}
+
+html,
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    font-family: -apple-system, system-ui, sans-serif;
+    color: var(--text);
     overflow-x: hidden;
-    -webkit-overflow-scrolling: touch; 
+    transition: background 0.3s;
 }
-#d-page.active { opacity: 1; transform: translateX(0); }
-#h-page.fade-out { opacity: 0; pointer-events: none; }
-.static-nav { position: relative; width: 100%; min-height: var(--nav-height); background: var(--bg); border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; }
-.cal-section { margin: 8px 15px; border-radius: 20px; background: var(--card); padding-bottom: 8px; box-shadow: 0 5px 25px rgba(0,0,0,0.03); }
-.cal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 8px; gap: 1px; transition: opacity 0.15s ease-out; }
-.cal-grid.fade { opacity: 0; }
-.day { 
-    height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; 
-    border-radius: 12px; cursor: pointer; position: relative;
-    transition: background-color 0.15s ease, transform 0.1s cubic-bezier(0.4, 0, 0.2, 1); 
-    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
-}
-.day span:first-child { font-size: 17px; font-weight: 600; }
-.day .l { font-size: 12px; margin-top: 0px; white-space: nowrap; letter-spacing: -0.2px; transform: scale(0.82); }
-.day.recorded { background: var(--mood-bg); }
-.day.is-today { background: var(--primary) !important; color: var(--bg); }
-.day.recorded::after { content: ''; position: absolute; bottom: 2px; width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
-.day:active { transform: scale(0.92); background-color: var(--mood-bg); }
-.day.is-today:active { transform: scale(0.92); background-color: var(--primary) !important; opacity: 0.8; }
-.day.recorded:active { background-color: rgba(0,0,0,0.08); }
-[data-theme="dark"] .day.recorded:active { background-color: rgba(255,255,255,0.08); }
 
-.btn-pill { 
-    height: 32px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; 
-    font-size: 13px; font-weight: 600; padding: 0 16px; border-radius: 16px; border: none; 
-    background: var(--mood-bg); color: var(--primary); cursor: pointer; transition: transform 0.1s ease, filter 0.1s ease; 
-    white-space: nowrap; flex-shrink: 0; 
+/* ============================================================
+   3. 页面容器与结构 (Layout Containers)
+   ============================================================ */
+.page,
+#d-page {
+    transition: none;
 }
-.btn-pill:active { transform: scale(0.95); filter: brightness(0.9); }
-.btn-save { background: var(--primary); color: var(--bg); }
-.icon-btn { background: none; border: none; padding: 8px; display: flex; align-items: center; justify-content: center; transition: transform 0.1s ease, background-color 0.1s ease; border-radius: 50%; }
-.icon-btn svg { width: 18px; height: 18px; fill: var(--sub); }
-.icon-btn:active { transform: scale(0.85); background-color: var(--mood-bg); }
 
-.editor-box { width: 100%; min-height: 30vh; font-size: 18px; line-height: 1.8; letter-spacing: 0.5px; color: var(--text); white-space: pre-wrap; outline: none; }
-.editor-box:empty:before { content: attr(placeholder); color: var(--sub); opacity: 0.5; }
-.box-header { font-size: 12px; font-weight: 700; margin: 0 0 12px; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
-/* ==========================================
-   数据可视化：岁月书脊 (波形音轨排列)
-========================================== */
-.growth-grid { 
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 3px; /* 恰到好处的呼吸空间 */
-    align-items: center; /* 确保高低不一的书脊垂直居中对齐，形成波形 */
+/* 详情页基础样式 */
+#d-page {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    min-height: -webkit-fill-available;
+    background: var(--bg);
+    z-index: 100;
+    opacity: 0;
+    padding-top: env(safe-area-inset-top);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
 }
-.growth-cell { 
-    width: 6px; /* 极窄的宽度 */
-    border-radius: 3px; /* 胶囊圆角 */
-    background: var(--mood-bg); 
-    transition: 0.3s; 
-}
-/* 根据字数动态改变高度，形成真实的岁月音轨 */
-.growth-cell.lv-1 { height: 12px; } /* 较短的记录 */
-.growth-cell.lv-2 { height: 18px; } /* 中等长度 */
-.growth-cell.lv-3 { height: 24px; } /* 深度长文 */
-/* 弹窗背景层的渐隐渐现 */
-.modal { 
-    position: fixed; inset: 0; 
-    background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); 
-    z-index: 300; display: none; align-items: flex-end; 
-    opacity: 0; /* 动画起点 */
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.modal.show { opacity: 1; }
 
-/* 弹窗内容区的底部滑出 (iOS Action Sheet 风格) */
-.modal-content { 
-    background: var(--card); width: 100%; 
-    border-radius: 25px 25px 0 0; padding: 20px; 
-    max-height: 85vh; overflow-y: auto; 
-    padding-bottom: calc(20px + env(safe-area-inset-bottom)); 
-    transform: translateY(100%); /* 动画起点 */
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+#d-page.active {
+    opacity: 1;
+    transform: translateX(0);
 }
+
+#h-page.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 顶部导航栏 */
+.static-nav {
+    position: relative;
+    width: 100%;
+    min-height: var(--nav-height);
+    background: var(--bg);
+    border-bottom: 1px solid rgb(0 0 0 / .05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+}
+
+/* ============================================================
+   4. 日历组件 (Calendar)
+   ============================================================ */
+.cal-section {
+    margin: 8px 15px;
+    border-radius: 20px;
+    background: var(--card);
+    padding-bottom: 8px;
+    box-shadow: 0 5px 25px rgb(0 0 0 / .03);
+}
+
+.cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+}
+
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 0 8px;
+    gap: 1px;
+    transition: opacity 0.15s ease-out;
+}
+
+.cal-grid.fade {
+    opacity: 0;
+}
+
+.day {
+    height: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s ease, transform 0.1s cubic-bezier(.4, 0, .2, 1);
+    -webkit-tap-highlight-color: #fff0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.day span:first-child {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+/* 农历/节日文字 */
+.day .l {
+    font-size: 12px;
+    margin-top: 0;
+    white-space: nowrap;
+    letter-spacing: -.2px;
+    transform: scale(.82);
+}
+
+.day.recorded {
+    background: var(--mood-bg);
+}
+
+.day.is-today {
+    color: var(--accent) !important;
+}
+
+/* 有记录的小圆点指示 */
+.day.recorded::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+}
+
+.day:active {
+    transform: scale(.92);
+    background-color: var(--mood-bg);
+}
+
+.day.is-today:active {
+    transform: scale(.92);
+    background-color: var(--mood-bg) !important;
+    opacity: .8;
+}
+
+.day.recorded:active {
+    background-color: rgb(0 0 0 / .08);
+}
+
+[data-theme="dark"] .day.recorded:active {
+    background-color: rgb(255 255 255 / .08);
+}
+
+/* ============================================================
+   5. 按钮系统 (Buttons)
+   ============================================================ */
+.btn-pill {
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 0 16px;
+    border-radius: 16px;
+    border: none;
+    background: var(--mood-bg);
+    color: var(--primary);
+    cursor: pointer;
+    transition: transform 0.1s ease, filter 0.1s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-pill:active {
+    transform: scale(.95);
+    filter: brightness(.9);
+}
+
+.btn-save {
+    background: var(--primary);
+    color: var(--bg);
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s ease, background-color 0.1s ease;
+    border-radius: 50%;
+}
+
+.icon-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--sub);
+}
+
+.icon-btn:active {
+    transform: scale(.85);
+    background-color: var(--mood-bg);
+}
+
+/* ============================================================
+   6. 编辑器与正文 (Editor)
+   ============================================================ */
+.editor-box {
+    width: 100%;
+    min-height: 30vh;
+    font-size: 18px;
+    line-height: 1.8;
+    letter-spacing: .5px;
+    color: var(--text);
+    white-space: pre-wrap;
+    outline: none;
+}
+
+.editor-box:empty:before {
+    content: attr(placeholder);
+    color: var(--sub);
+    opacity: .5;
+}
+
+.box-header {
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ============================================================
+   7. 弹窗组件 (Modals)
+   ============================================================ */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / .5);
+    backdrop-filter: blur(8px);
+    z-index: 300;
+    display: none;
+    align-items: flex-end;
+    opacity: 0;
+    transition: opacity 0.3s cubic-bezier(.4, 0, .2, 1);
+}
+
+.modal.show {
+    opacity: 1;
+}
+
+.modal-content {
+    background: var(--card);
+    width: 100%;
+    border-radius: 25px 25px 0 0;
+    padding: 20px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+}
+
 .modal.show .modal-content {
     transform: translateY(0);
 }
-#auth-layer { position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-#pwd-i { padding:15px; border:none; background:var(--mood-bg); color:var(--text); border-radius:20px; margin-bottom:20px; text-align:center; font-size: 24px; width:220px; }
 
-.setting-row { height: 54px; display: flex; align-items: center; justify-content: space-between; background: var(--mood-bg); padding: 0 18px; margin-bottom: 12px; border-radius: 14px; transition: transform 0.15s ease, opacity 0.15s ease; -webkit-tap-highlight-color: transparent; }
-.setting-row:active { transform: scale(0.97); opacity: 0.8; }
-.modal-content .btn-pill { height: 54px !important; width: 100% !important; padding: 0 18px !important; margin-bottom: 12px !important; border-radius: 14px !important; font-size: 15px !important; box-sizing: border-box; }
-.theme-switch-group { height: 54px; display: flex; align-items: center; background: var(--mood-bg); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
-.theme-switch-group .theme-btn { flex: 1; padding: 10px 0; text-align: center; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); cursor: pointer; transition: 0.2s; }
-.theme-btn.active { background: var(--card); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+/* ============================================================
+   8. 认证层 (Auth Layer)
+   ============================================================ */
+#auth-layer {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
 
-#mood-grid-main { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-.mood-tag { display: flex; align-items: center; justify-content: center; height: 44px; padding: 0 4px; margin: 0; border-radius: 14px; background: var(--mood-bg); color: var(--sub); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; white-space: nowrap; }
-.mood-tag.active { background: var(--primary) !important; color: var(--bg) !important; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+#pwd-i {
+    padding: 15px;
+    border: none;
+    background: var(--mood-bg);
+    color: var(--text);
+    border-radius: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 24px;
+    width: 220px;
+}
+
+/* ============================================================
+   9. 设置与选项 (Settings)
+   ============================================================ */
+.setting-row {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--mood-bg);
+    padding: 0 18px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    -webkit-tap-highlight-color: #fff0;
+}
+
+.setting-row:active {
+    transform: scale(.97);
+    opacity: .8;
+}
+
+/* 设置中的大按钮适配 */
+.modal-content .btn-pill {
+    height: 54px !important;
+    width: 100% !important;
+    padding: 0 18px !important;
+    margin-bottom: 12px !important;
+    border-radius: 14px !important;
+    font-size: 15px !important;
+    box-sizing: border-box;
+}
+
+.theme-switch-group {
+    height: 54px;
+    display: flex;
+    align-items: center;
+    background: var(--mood-bg);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 12px;
+}
+
+.theme-switch-group .theme-btn {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sub);
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.theme-btn.active {
+    background: var(--card);
+    color: var(--primary);
+    box-shadow: 0 2px 8px rgb(0 0 0 / .05);
+}
+
+/* ============================================================
+   10. 心情标签 (Mood Tags)
+   ============================================================ */
+#mood-grid-main {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.mood-tag {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    padding: 0 4px;
+    margin: 0;
+    border-radius: 14px;
+    background: var(--mood-bg);
+    color: var(--sub);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #fff0;
+    white-space: nowrap;
+}
+
+.mood-tag.active {
+    background: var(--primary) !important;
+    color: var(--bg) !important;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgb(0 0 0 / .1);
+}
+
+/* 心情颜色系列 */
 .mood-tag.active.f-energy { background: rgb(var(--energy)) !important; color: #fff !important; }
 .mood-tag.active.f-healing { background: rgb(var(--healing)) !important; color: #fff !important; }
 .mood-tag.active.f-thinking { background: rgb(var(--thinking)) !important; color: #fff !important; }
 .mood-tag.active.f-melancholy { background: rgb(var(--melancholy)) !important; color: #fff !important; }
 .mood-tag.active.f-release { background: rgb(var(--release)) !important; color: #fff !important; }
 
-.cal-ctrl button { transition: transform 0.1s ease, background-color 0.1s; border-radius: 12px; }
-.cal-ctrl button:active { transform: scale(0.85); background-color: rgba(0,0,0,0.08) !important; }
+/* 日历控制按钮微调 */
+.cal-ctrl button {
+    transition: transform 0.1s ease, background-color 0.1s;
+    border-radius: 12px;
+}
 
-#toast-container { position: fixed; top: env(safe-area-inset-top, 20px); left: 0; right: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
-.toast { padding: 12px 24px; border-radius: 12px; background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-left: 4px solid var(--accent); animation: toast-in 0.3s cubic-bezier(0.4, 0, 0.2, 1); transition: opacity 0.3s ease, transform 0.3s ease; max-width: 90%; text-align: center; word-break: break-word; }
+.cal-ctrl button:active {
+    transform: scale(.85);
+    background-color: rgb(0 0 0 / .08) !important;
+}
+
+/* ============================================================
+   11. 消息通知 (Toast)
+   ============================================================ */
+#toast-container {
+    position: fixed;
+    top: env(safe-area-inset-top, 20px);
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgb(0 0 0 / .1);
+    border-left: 4px solid var(--accent);
+    animation: toast-in 0.3s cubic-bezier(.4, 0, .2, 1);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    max-width: 90%;
+    text-align: center;
+    word-break: break-word;
+}
+
 .toast.t-error { border-left-color: var(--danger); }
-.toast.t-success { border-left-color: var(--healing); }
-.toast.fade-out { opacity: 0; transform: translateY(-20px) scale(0.95); }
-[data-theme="dark"] .toast { box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-left: 4px solid var(--accent); }
+.toast.t-success { border-left-color: var(--accent); }
+
+.toast.fade-out {
+    opacity: 0;
+    transform: translateY(-20px) scale(.95);
+}
+
+[data-theme="dark"] .toast {
+    box-shadow: 0 10px 30px rgb(0 0 0 / .3);
+    border: 1px solid rgb(255 255 255 / .1);
+    border-left: 4px solid var(--accent);
+}
+
 [data-theme="dark"] .toast.t-error { border-left-color: var(--danger); }
-[data-theme="dark"] .toast.t-success { border-left-color: var(--healing); }
-@keyframes toast-in { 0% { opacity: 0; transform: translateY(-20px) scale(0.95); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+[data-theme="dark"] .toast.t-success { border-left-color: var(--accent); }
 
+@keyframes toast-in {
+    0% { opacity: 0; transform: translateY(-20px) scale(.95); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+#content-v {
+    font-size: 18px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+    letter-spacing: 0.5px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow: visible;
+}
+/* ============================================================
+   12. 打印与导出 (Print Styles)
+   ============================================================ */
 @media print {
-    #h-page, .static-nav, #settings-modal, #more-modal, #toast-container, .modal { display: none !important; }
-    html, body, .page, #d-page { height: auto !important; min-height: auto !important; max-height: none !important; position: static !important; background: white !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
-    #title-v, #meta-v { break-after: avoid; page-break-after: avoid; }
-    #content-v { break-inside: auto; color: black !important;}
-    * { filter: none !important; }
-}
+    /* 隐藏所有无关元素 */
+    #h-page, .static-nav, #settings-modal, #more-modal, #toast-container, .modal,
+    #ios-survival-banner, #auth-layer, .icon-btn, .btn-pill:not(.btn-save),
+    .cal-section, #search-input, #index-list, .growth-grid, .box-header, #days-count,
+    .cal-ctrl, .cal-header, .cal-grid, .day, .modal-content, .modal, #mood-trigger-btn,
+    #save-hint, #e-tools, #v-tools .icon-btn, #v-tools .btn-pill:not(.btn-save) {
+        display: none !important;
+    }
 
+    /* 重置所有元素，清除固定定位、浮动、溢出限制 */
+    * {
+        position: static !important;
+        float: none !important;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+        page-break-after: auto;
+        page-break-before: auto;
+        page-break-inside: auto;
+        transform: none !important;
+        transition: none !important;
+        box-shadow: none !important;
+    }
+
+    /* 重置 html, body */
+    html, body {
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* 详情页容器 */
+    #d-page {
+        display: block !important;
+        position: static !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    /* 主内容容器：移除宽度限制，占满纸张 */
+    .main-container {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 20px !important;
+        background: white !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* 确保内容块可拆分 */
+    #v-box, #e-box {
+        height: auto !important;
+        overflow: visible !important;
+        page-break-inside: auto;
+    }
+
+    /* 正文区域允许换行和分页 */
+    #content-v {
+        font-size: 12pt !important;  /* 保证可读性 */
+        line-height: 1.5 !important;
+        overflow: visible !important;
+        page-break-inside: auto;
+        word-break: break-word;
+        white-space: normal;
+    }
+
+    /* 标题和元数据 */
+    #title-v, #meta-v {
+        page-break-after: avoid;
+        break-after: avoid;
+    }
+
+    /* 确保任何固定宽度的元素适应纸张 */
+    img, svg {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+	
+}
+/* ============================================================
+   13. 桌面适配 (Desktop Responsive)
+   ============================================================ */
 @media (min-width: 768px) {
-    body { background: #eef2f5; display: flex; justify-content: center; }
+    body {
+        background: #eef2f5;
+        display: flex;
+        justify-content: center;
+    }
+
     [data-theme="dark"] body { background: #0a0a0a; }
-    .page, #d-page, #auth-layer { position: fixed !important; inset: 0 !important; margin: 20px auto !important; width: 100% !important; max-width: 480px !important; height: calc(100vh - 40px) !important; border-radius: 30px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.05); overflow-y: auto !important; }
-    .modal { position: fixed !important; inset: 0 !important; margin: 20px auto !important; width: 100% !important; max-width: 480px !important; height: calc(100vh - 40px) !important; border-radius: 30px !important; overflow: hidden !important; }
-    [data-theme="dark"] .page, [data-theme="dark"] #d-page, [data-theme="dark"] #auth-layer { border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
-    #toast-container { max-width: 480px; margin: 0 auto; top: 40px; }
+
+    .page,
+    #d-page,
+    #auth-layer {
+        position: fixed !important;
+        inset: 0 !important;
+        margin: 20px auto !important;
+        width: 100% !important;
+        max-width: 480px !important;
+        height: calc(100vh - 40px) !important;
+        border-radius: 30px !important;
+        box-shadow: 0 20px 60px rgb(0 0 0 / .1);
+        border: 1px solid rgb(0 0 0 / .05);
+        overflow-y: auto !important;
+    }
+
+    .modal {
+        position: fixed !important;
+        inset: 0 !important;
+        margin: 20px auto !important;
+        width: 100% !important;
+        max-width: 480px !important;
+        height: calc(100vh - 40px) !important;
+        border-radius: 30px !important;
+        overflow: hidden !important;
+    }
+
+    [data-theme="dark"] .page,
+    [data-theme="dark"] #d-page,
+    [data-theme="dark"] #auth-layer {
+        border: 1px solid rgb(255 255 255 / .1);
+        box-shadow: 0 20px 60px rgb(0 0 0 / .5);
+    }
+
+    #toast-container {
+        max-width: 480px;
+        margin: 0 auto;
+        top: 40px;
+    }
+	html {
+        background: #eef2f5 !important;
+    }
+    [data-theme="dark"] html {
+        background: #0a0a0a !important;
+    }
+    body {
+        background: transparent !important;
+    }
+    .page, #d-page, #auth-layer {
+        background: var(--bg); /* 确保这些容器背景跟随主题 */
+    }
 }
 
-#mood-trigger-btn { user-select: none; -webkit-tap-highlight-color: transparent; }
-#mood-trigger-btn:active { transform: scale(0.92); opacity: 0.8; }
+/* ============================================================
+   14. 细节与设备兼容修复 (Device Specific Fixes)
+   ============================================================ */
+#mood-trigger-btn {
+    user-select: none;
+    -webkit-tap-highlight-color: #fff0;
+}
 
-.main-container { max-width: 650px; margin: 0 auto; padding: 15px 20px;}
-::selection { background-color: rgba(0, 0, 0, 0.12); }
-[data-theme="dark"] ::selection { background-color: rgba(255, 255, 255, 0.18); }
+#mood-trigger-btn:active {
+    transform: scale(.92);
+    opacity: .8;
+}
 
-html.android-device, body.android-device { overscroll-behavior-y: none !important; }
-body.native-scroll #d-page { position: absolute !important; height: auto !important; min-height: 100vh !important; overflow: visible !important; }
-html.ios-device.is-editing, body.ios-device.is-editing { height: auto !important; min-height: 100vh !important; min-height: 100svh !important; overflow-y: auto !important; position: relative !important; background-color: var(--bg) !important; }
-body.ios-device.native-scroll.is-editing #d-page { position: relative !important; height: auto !important; min-height: 100vh !important; min-height: 100svh !important; overflow: visible !important; transform: none !important; }
+.main-container {
+    max-width: 650px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    background: var(--bg);
+    border-radius: 20px;
+    height: auto;
+    overflow: visible;
+}
+#v-box, #e-box {
+    overflow: visible;
+}
+::selection { background-color: rgb(0 0 0 / .12); }
+[data-theme="dark"] ::selection { background-color: rgb(255 255 255 / .18); }
+
+/* 安卓设备拉动刷新限制 */
+html.android-device, body.android-device {
+    overscroll-behavior-y: none !important;
+}
+
+body.native-scroll #d-page {
+    position: absolute !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+}
+
+/* iOS 输入状态适配 */
+html.ios-device.is-editing,
+body.ios-device.is-editing {
+    height: auto !important;
+    min-height: 100vh !important;
+    min-height: 100svh !important;
+    overflow-y: auto !important;
+    position: relative !important;
+    background-color: var(--bg) !important;
+}
+
+body.ios-device.native-scroll.is-editing #d-page {
+    position: relative !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    min-height: 100svh !important;
+    overflow: visible !important;
+    transform: none !important;
+}
+
+/* 编辑区高度分配 */
 #v-box { padding-bottom: calc(45vh + env(safe-area-inset-bottom)) !important; }
 #e-box { padding-bottom: 0 !important; }
-#e-content { min-height: 75vh !important; padding-bottom: 15vh !important; }
-html.modal-open, body.modal-open { overflow: hidden !important; touch-action: none !important; }
+#e-content { min-height: 50vh !important; padding-bottom: 30vh !important; }
 
+/* 弹窗开启时的背景锁定 */
+html.modal-open,
+body.modal-open {
+    overflow: hidden !important;
+    touch-action: none !important;
+}
+
+/* 鼠标交互优化 */
 @media (hover: hover) and (pointer: fine) {
-    * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-    html, body, html.is-editing, body.is-editing { overflow-y: scroll !important; }
-    .btn-pill:active, .icon-btn:active, .day:active { transform: none !important; filter: brightness(0.9); }
+    * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    html, body, html.is-editing, body.is-editing {
+        overflow-y: scroll !important;
+    }
+    .btn-pill:active, .icon-btn:active, .day:active {
+        transform: none !important;
+        filter: brightness(.9);
+    }
 }
-/* 彻底抹除 Windows/PC 默认的丑陋滚动条，保留滚动能力 */
-::-webkit-scrollbar {
-    width: 6px; /* 极细的滚动条 */
-    height: 6px;
-}
-::-webkit-scrollbar-track {
-    background: transparent; 
-}
-::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1); 
-    border-radius: 10px;
-}
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15); 
-}
-/* 在移动设备上完全隐藏滚动条（利用伪类特征） */
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #fff0; }
+::-webkit-scrollbar-thumb { background: rgb(0 0 0 / .1); border-radius: 10px; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .15); }
+
+/* 触摸屏隐藏滚动条 */
 @media (hover: none) and (pointer: coarse) {
     ::-webkit-scrollbar { width: 0; display: none; }
 }
-/* ==========================================
-   单向动画引擎 (避免滥用 transition 导致的全局状态黏连)
-========================================== */
+
+/* ============================================================
+   15. 动画效果 (Animations)
+   ============================================================ */
 @keyframes slideFadeIn {
     0% { opacity: 0; transform: translateY(15px); }
     100% { opacity: 1; transform: translateY(0); }
 }
+
 @keyframes fadeOut {
     0% { opacity: 1; }
     100% { opacity: 0; }
 }
 
-/* 进场类：带有轻微物理浮力感 */
-.animate-in { 
-    animation: slideFadeIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
+.animate-in {
+    animation: slideFadeIn 0.25s cubic-bezier(.2, .8, .2, 1) forwards;
 }
-/* 退场类：极速淡出 */
-.animate-out { 
-    animation: fadeOut 0.15s ease-out forwards; 
+
+.animate-out {
+    animation: fadeOut 0.15s ease-out forwards;
 }
+
+/* ============================================================
+   16. 岁月书脊 (Growth Grid)
+   ============================================================ */
+.growth-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 1px;
+    align-items: center;
+    min-height: 70px;
+    padding: 5px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.growth-grid::-webkit-scrollbar { height: 6px; }
+.growth-grid::-webkit-scrollbar-track { background: #fff0; }
+.growth-grid::-webkit-scrollbar-thumb { background: rgb(0 0 0 / .2); border-radius: 4px; }
+[data-theme="dark"] .growth-grid::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .2); }
+
+.growth-cell {
+    width: 3px;
+    border-radius: 1px;
+    transition: none;
+    cursor: default;
+}
+
 </style>
 </head>
 <body>
@@ -292,11 +921,11 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
         <div class="cal-grid" id="cal-g"></div>
     </div>
 	
-	<div style="margin: 10px 15px; padding-bottom: 1px;">
+	<div style="margin: 10px 15px; padding-bottom: 0px; padding-top: 0px;">
         <div style="display: flex; gap: 10px; align-items: center;">
             <input type="text" id="search-input" placeholder="搜索，或点击右侧漫游..." oninput="filterIndex()" style="flex: 1; padding: 15px; border-radius: 15px; border: none; background: var(--card); font-size: 14px; color: var(--text); outline: none;">
             
-            <button class="btn-pill btn-save" style="width: 48px; height: 48px; padding: 0; border-radius: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1);" onclick="goRandom()" aria-label="漫游时光机">
+            <button class="btn-pill btn-save" style="width: 48px; height: 48px; padding: 0; border-radius: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1);background: var(--mood-bg);color: var(--accent)" onclick="goRandom()" aria-label="漫游时光机">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px;">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
@@ -343,8 +972,8 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
                 <div onmousedown="if(event.cancelable) event.preventDefault(); openMoodModal();" 
 					 ontouchstart="if(event.cancelable) event.preventDefault(); openMoodModal();" 
 					 id="mood-trigger-btn" 
-					 style="font-size: 13px; color: var(--accent); font-weight: 600; cursor: pointer; padding: 5px 0;">
-					 ◌ 选择心情...
+					 style="font-size: 13px; color: var(--sub); font-weight: 600; cursor: pointer; padding: 5px 0;">
+					 ◌ 选择心情
 				</div>
                 
                 <div id="save-hint" style="font-size: 11px; color: var(--sub); opacity: 0.6; font-weight: 600;"></div>
@@ -369,7 +998,7 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
         </div>
 
         <label class="setting-row" style="cursor: pointer;">
-            <span style="font-size: 14px; font-weight: 600; color: var(--sub);">个性化调色</span>
+            <span style="font-size: 14px; font-weight: 600; color: var(--sub);">自选颜色</span>
             <input type="color" id="color-picker" value="#d4af37" onchange="setAccentColor(this.value)" style="border:none; width:28px; height:28px; border-radius:50%; cursor:pointer; background:none; padding:0;">
         </label>
 
@@ -385,12 +1014,12 @@ html.modal-open, body.modal-open { overflow: hidden !important; touch-action: no
 
         <button class="btn-pill" style="display: flex; align-items: center; gap: 12px;" onclick="exportJSON()">
             <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">备份纯文本 (.json)</span>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">备份数据 (.json)</span>
         </button>
 
         <button class="btn-pill" style="display: flex; align-items: center; gap: 12px;" onclick="document.getElementById('file-i').click()">
             <svg style="width:18px; height:18px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">恢复纯文本 (.json)</span>
+            <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">恢复数据 (.json)</span>
         </button>
         <input type="file" id="file-i" accept=".json" style="display:none" onchange="importJSON(this)">
         
@@ -589,7 +1218,14 @@ const PWD_KEY = 'ShiXu_PWD_V2', DB_NAME = 'ShiXu_DB';
 const MOOD_DEFAULTS = ['✦ 澄明', '〰 涟漪', '○ 留白', '꩜ 混沌', '◭ 释然'];
 const moodFamilies = { '✦ 澄明': 'f-energy', '〰 涟漪': 'f-thinking', '○ 留白': 'f-healing', '꩜ 混沌': 'f-melancholy', '◭ 释然': 'f-release' };
 // 微调澄明(暖沙黄)与释然(陶土红)的色值，使其更具高级灰度
-const colorMap = { 'f-energy': '220, 199, 142', 'f-healing': '157, 176, 163', 'f-thinking': '92, 122, 153', 'f-melancholy': '138, 136, 148', 'f-release': '184, 115, 107', 'f-custom': '163, 160, 152' };
+const colorMap = {
+    'f-energy': '230, 190, 80',
+    'f-thinking': '100, 130, 160',
+    'f-healing': '130, 155, 145',
+    'f-melancholy': '160, 140, 170',
+    'f-release': '200, 120, 100',
+    'f-custom': '180, 170, 160'
+};
 const $ = (id) => document.getElementById(id);
 
 let lockedScrollY = 0; 
@@ -792,31 +1428,35 @@ function importJSON(input) {
             const data = JSON.parse(e.target.result);
             if (!Array.isArray(data)) throw new Error("无效格式");
 
-            const tx = db.transaction("notes", "readwrite");
-            const store = tx.objectStore("notes");
-            const putPromises = [];
-
+            // 第一步：预加密所有记录（不涉及数据库）
+            const encryptedRecords = [];
             for (const record of data) {
                 const encryptedRecord = { ...record };
-                const isAlreadyEncrypted = typeof record.title === 'string' &&
-                                           record.title.includes(':') &&
-                                           record.title.length > 50;
+                const isAlreadyEncrypted = (record.title && /^[a-f0-9]+:[a-f0-9]+$/i.test(record.title)) ||
+                           (record.content && /^[a-f0-9]+:[a-f0-9]+$/i.test(record.content));
                 if (!isAlreadyEncrypted) {
                     if (record.title) encryptedRecord.title = await CryptoSvc.encrypt(record.title);
                     if (record.content) encryptedRecord.content = await CryptoSvc.encrypt(record.content);
                 }
                 delete encryptedRecord.images;
-                const request = store.put(encryptedRecord);
-                putPromises.push(new Promise((resolve, reject) => {
-                    request.onsuccess = resolve;
-                    request.onerror = reject;
-                }));
+                encryptedRecords.push(encryptedRecord);
             }
+
+            // 第二步：开启事务，批量写入
+            const tx = db.transaction("notes", "readwrite");
+            const store = tx.objectStore("notes");
+            const putPromises = encryptedRecords.map(record => {
+                const request = store.put(record);
+                return new Promise((resolve, reject) => {
+                    request.onsuccess = resolve;
+                    request.onerror = () => reject(request.error);
+                });
+            });
 
             await Promise.all(putPromises);
             await new Promise((resolve, reject) => {
                 tx.oncomplete = resolve;
-                tx.onerror = reject;
+                tx.onerror = () => reject(tx.error);
             });
 
             sync();
@@ -829,7 +1469,6 @@ function importJSON(input) {
     r.readAsText(file);
     input.value = '';
 }
-
 // 独立定义 saveAsSimple（放在 importJSON 之后）
 function saveAsSimple(blob, fileName) {
     const url = URL.createObjectURL(blob);
@@ -840,27 +1479,72 @@ function saveAsSimple(blob, fileName) {
     URL.revokeObjectURL(url);
 }
 
-let randomHistory = []; 
+let randomHistory = [];
 function goRandom() {
-    const keys = Array.from(dataMap.keys()); if (keys.length === 0) { showToast("还没有任何记录可以漫步哦", "info"); return; }
-    const today = new Date(); const currY = today.getFullYear(), currM = today.getMonth() + 1, currD = today.getDate(), todayKey = `${currY}/${currM}/${currD}`;
-    let availableKeys = keys.filter(k => k !== todayKey && k !== curKey); if (availableKeys.length === 0) { showToast("过去还是一片空白，快去创造回忆吧", "info"); return; }
-    const yearlyKeys = [], monthlyKeys = []; 
-    availableKeys.forEach(k => { const [y, m, d] = k.split('/').map(Number); if (m === currM && d === currD && y !== currY) yearlyKeys.push(k); else if (d === currD && (m !== currM || y !== currY)) monthlyKeys.push(k); });
+    const keys = Array.from(dataMap.keys());
+    if (keys.length === 0) {
+        showToast("还没有任何记录可以漫步哦", "info");
+        return;
+    }
+    const today = new Date();
+    const currY = today.getFullYear(), currM = today.getMonth() + 1, currD = today.getDate();
+    const todayKey = `${currY}/${currM}/${currD}`;
+    let availableKeys = keys.filter(k => k !== todayKey && k !== curKey);
+    if (availableKeys.length === 0) {
+        showToast("过去还是一片空白，快去创造回忆吧", "info");
+        return;
+    }
+
+    const yearlyKeys = [];      // 往年今天
+    const thisYearSameDay = []; // 今年其他月份的同一天
+    const otherYearSameDay = [];// 往年其他月份的同一天
+
+    availableKeys.forEach(k => {
+        const [y, m, d] = k.split('/').map(Number);
+        if (m === currM && d === currD && y !== currY) {
+            yearlyKeys.push(k);
+        } else if (d === currD && y === currY && m !== currM) {
+            thisYearSameDay.push(k);
+        } else if (d === currD && y !== currY) {
+            otherYearSameDay.push(k);
+        }
+    });
+
     let targetKey = '';
-    if (yearlyKeys.length > 0) { targetKey = yearlyKeys[Math.floor(Math.random() * yearlyKeys.length)]; showToast(`时光机：回到了 ${targetKey.split('/')[0]} 年的今天`, "success"); } 
-    else if (monthlyKeys.length > 0) { targetKey = monthlyKeys[Math.floor(Math.random() * monthlyKeys.length)]; const targetMonth = targetKey.split('/')[1]; showToast(`时光机：回到了 ${targetMonth} 月的今天`, "success"); } 
-    else { let pool = availableKeys.filter(k => !randomHistory.includes(k)); if (pool.length === 0) { randomHistory = []; pool = availableKeys; } targetKey = pool[Math.floor(Math.random() * pool.length)]; randomHistory.push(targetKey); if (randomHistory.length > 10) randomHistory.shift(); showToast("随机坠入某段回忆", "info"); }
+    if (yearlyKeys.length > 0) {
+        targetKey = yearlyKeys[Math.floor(Math.random() * yearlyKeys.length)];
+        showToast(`时光机：回到了 ${targetKey.split('/')[0]} 年的今天`, "success");
+    } else if (thisYearSameDay.length > 0) {
+        targetKey = thisYearSameDay[Math.floor(Math.random() * thisYearSameDay.length)];
+        const targetMonth = targetKey.split('/')[1];
+        showToast(`时光机：回到了 ${targetMonth} 月的今天`, "success");
+    } else if (otherYearSameDay.length > 0) {
+        targetKey = otherYearSameDay[Math.floor(Math.random() * otherYearSameDay.length)];
+        const targetDate = targetKey.split('/')[1] + '/' + targetKey.split('/')[2];
+        showToast(`时光机：回到了 ${targetDate}（往年）`, "success");
+    } else {
+        let pool = availableKeys.filter(k => !randomHistory.includes(k));
+        if (pool.length === 0) {
+            randomHistory = [];
+            pool = availableKeys;
+        }
+        targetKey = pool[Math.floor(Math.random() * pool.length)];
+        randomHistory.push(targetKey);
+        if (randomHistory.length > 10) randomHistory.shift();
+        showToast("随机坠入某段回忆", "info");
+    }
     openNote(targetKey);
 }
 
-async function hashStr(str) { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''); }
+async function hashStr(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 async function checkAuth() {
-    const input = $('pwd-i').value; 
+    const input = $('pwd-i').value;
     if (!input) return;
 
     try {
-        // 1. 探针：检查浏览器是否开放了密码学引擎 (针对 HTTP 环境被拦截的防御)
         if (!window.crypto || !window.crypto.subtle) {
             showToast("环境不安全 (需 HTTPS 协议)，加密引擎被浏览器拦截，无法解锁", "error", 5000);
             return;
@@ -868,25 +1552,21 @@ async function checkAuth() {
 
         const stored = localStorage.getItem(PWD_KEY);
         const hashedInput = await hashStr(input);
-        
-        // 2. 正常逻辑分发
-        if(!stored) { 
-            localStorage.setItem(PWD_KEY, hashedInput); 
-            await CryptoSvc.deriveKey(input); 
-            start(); 
-        } 
-        else if(hashedInput === stored) {
-            await CryptoSvc.deriveKey(input); 
-            start(); 
-        } 
-        else { 
-            showToast("密码错误", "error"); 
-            $('pwd-i').value=''; 
+
+        if (!stored) {
+            localStorage.setItem(PWD_KEY, hashedInput);
+            await CryptoSvc.deriveKey(input);
+            start();
+        } else if (hashedInput === stored) {
+            await CryptoSvc.deriveKey(input);
+            start();
+        } else {
+            showToast("密码错误", "error");
+            $('pwd-i').value = '';
         }
     } catch (err) {
-        // 3. 兜底：哪怕发生未知崩溃，也要通过 UI 告诉用户，而不是装死
         showToast("解锁程序异常: " + err.message, "error", 4000);
-        $('pwd-i').value='';
+        $('pwd-i').value = '';
     }
 }
 
@@ -911,10 +1591,8 @@ function start() {
             if (countReq.result === 0) {
                 const today = new Date();
                 const initKey = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
-                
-                // 🌟 重构后的操作手册版文案
-                const manualText = "「拾绪」：一座无需联网的私人思维孤岛。\n\n【核心功能】\n1.🎨 一键生成带纸张噪点的莫兰迪金句卡片，支持 PDF 排版导出。\n2.🕰️ 时光漫游：特色随机漫步引擎，让你在某个深夜与过去的自己不期而遇。\n3.📊 情绪足迹：用色彩深浅记录笔耕不辍，绘制一整年的心灵热力图。\n4.🔒 绝对私密：无云端服务器，AES-256 硬件级加密死锁于本地。\n\n【⚠️ 重要安全须知】\n1. 密钥唯一：本应用采用 AES-256 硬件级加密。您的解锁密码是解开数据的唯一凭证，开发者无法找回。一旦遗忘密码，数据将永久损毁。\n2. 数据留存：在浏览器环境下（未添加到主屏幕），数据极易被手机系统作为缓存自动清理。请务必定期在设置中点击「备份纯文本」导出您的数据。\n\n阅读完毕后，可点击右上角「...」销毁此篇记录。";
-                
+
+				const manualText = "【核心功能】\n• 写日记：点击日历格子即可开始记录\n• 心情标签：选择或自定义心情（最多5个）\n• 时光漫游：随机回顾过往日记\n• 分享卡片：一键生成长图保存或分享n•可设置用户名和主题颜色\n• 备份恢复：设置中导出/导入纯文本备份\n\n【⚠️ 重要安全须知】\n• 密码唯一：忘记密码数据将永久丢失，无法找回\n• 定期备份：浏览器环境数据可能被系统清理，请务必定期导出备份，安装到桌面可防数据丢失\n•iOS 使用safari点击「分享」→「添加到主屏幕」，安卓使用edge或者chrome点击「菜单」→「添加到主屏幕」\n可随时点击日记右上角「...」删除此篇记录。";
                 // 写入数据库
                 const encryptedTitle = await CryptoSvc.encrypt("拾绪：产品介绍与安全须知");
                 const encryptedContent = await CryptoSvc.encrypt(manualText);
@@ -991,31 +1669,34 @@ async function sync() {
 function renderSafeText(text) {
     if (!text) return '';
     
-    // 1. 绝对防御层：优先对实体字符进行转义，物理级剿灭所有 HTML 标签注入风险
     let safeText = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
         
-    // 2. 智能嗅探层：识别 http/https 长链接，将其折叠为极简的胶囊链接
-    // 匹配规则：以 http 开启，直到遇到空白符或换行符为止
     safeText = safeText.replace(/(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)/g, function(url) {
-        // 利用内联 SVG 和极简 CSS 打造一颗精致的“链接胶囊”
+        const safeUrl = url.replace(/'/g, "\\'");
         return `<a href="${url}" target="_blank" style="
-            display: inline-flex; 
-            align-items: center; 
-            gap: 4px; 
-            color: var(--accent); 
-            background: var(--mood-bg); 
-            padding: 2px 8px; 
-            border-radius: 6px; 
-            font-size: 14px; 
-            text-decoration: none; 
-            margin: 0 4px;
-            vertical-align: middle;
-            transition: 0.2s;
-        ">
-            <svg style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            display: inline;
+            color: var(--accent);
+            background: var(--mood-bg);
+            padding: 0 2px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-size: 0.9em;
+            line-height: 1.2;
+            white-space: nowrap;
+        " onclick="return confirm('即将访问外部链接：${safeUrl}\\n是否继续？');">
+            <svg style="
+                width: 0.9em;
+                height: 0.9em;
+                vertical-align: middle;
+                display: inline;
+                margin-right: 2px;
+                stroke: currentColor;
+                fill: none;
+                stroke-width: 2;
+            " viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             网页链接
         </a>`;
     });
@@ -1039,12 +1720,37 @@ function renderCal() {
 }
 
 function renderGrowth(all, year) {
-    const grid = $('growth-grid'); grid.innerHTML = ''; const frag = document.createDocumentFragment();
-    all.filter(n => parseInt(n.date.split('/')[0]) === parseInt(year)).sort((a,b) => new Date(a.date.replace(/\//g, '-')) - new Date(b.date.replace(/\//g, '-'))).forEach(n => {
-        const cell = document.createElement('div'); const family = n.mood && n.mood.split(',').length ? (moodFamilies[n.mood.split(',')[0]] || 'f-custom') : 'f-custom'; const lv = n.words > 300 ? 'lv-3' : (n.words > 100 ? 'lv-2' : 'lv-1');
-        cell.className = `growth-cell ${family} ${lv}`; cell.style.backgroundColor = `rgba(${colorMap[family] || colorMap['f-custom']}, ${lv === 'lv-3' ? 1 : (lv === 'lv-2' ? 0.6 : 0.3)})`; frag.appendChild(cell);
+    const grid = $('growth-grid');
+    grid.innerHTML = '';
+    
+    // 筛选当年记录并按日期排序
+    const yearRecords = all.filter(n => parseInt(n.date.split('/')[0]) === parseInt(year))
+                           .sort((a, b) => new Date(a.date.replace(/\//g, '-')) - new Date(b.date.replace(/\//g, '-')));
+    
+    if (yearRecords.length === 0) {
+        grid.innerHTML = '<div style="color: var(--sub); font-size: 12px; padding: 8px;">暂无记录</div>';
+        return;
+    }
+
+    // 计算最大字数（用于线性高度映射）
+    const maxWords = Math.max(...yearRecords.map(n => n.words || 0), 1);
+    const minHeight = 8, maxHeight = 60;  // 根据喜好调整范围
+    
+    yearRecords.forEach(record => {
+        const cell = document.createElement('div');
+        const family = record.mood && record.mood.split(',').length ? (moodFamilies[record.mood.split(',')[0]] || 'f-custom') : 'f-custom';
+        const wordCount = record.words || 0;
+        // 线性高度
+        const height = minHeight + (wordCount / maxWords) * (maxHeight - minHeight);
+        // 颜色透明度也随字数线性变化，增强波形感
+        const opacity = 0.3 + (wordCount / maxWords) * 0.7;
+        
+        cell.className = `growth-cell ${family}`;
+        cell.style.height = `${height}px`;
+        cell.style.backgroundColor = `rgba(${colorMap[family] || colorMap['f-custom']}, ${opacity})`;
+        // 不再设置 title
+        grid.appendChild(cell);
     });
-    grid.appendChild(frag);
 }
 
 window.addEventListener('hashchange', async () => {
@@ -1223,7 +1929,19 @@ titleInput.addEventListener('input', function() {
     this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
     clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => window.location.hash.startsWith('#edit/') && save(false), 3000);
 });
-titleInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); $('e-content').focus(); } });
+titleInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();           // 阻止回车换行
+        const editor = $('e-content');
+        const dp = $('d-page');
+        // 保存当前滚动位置
+        const savedScrollTop = dp.scrollTop;
+        // 聚焦正文区
+        editor.focus();
+        // 立即恢复滚动位置，防止浏览器自动滚动
+        dp.scrollTop = savedScrollTop;
+    }
+});
 editor.addEventListener('input', () => { clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => window.location.hash.startsWith('#edit/') && save(false), 3000); });
 
 async function executeSearch() {
@@ -1248,7 +1966,7 @@ function goToday() { const g = $('cal-g'); g.classList.add('fade'); setTimeout((
 function openMoodModal() { renderMoodModal(); openModal('mood-modal'); }
 function updateMoodDisplay() { 
     // 占位符依然保持虚线圆，语义完美
-    $('mood-trigger-btn').innerText = activeMoods.length ? activeMoods.join(', ') : '◌ 选择心情...'; 
+    $('mood-trigger-btn').innerText = activeMoods.length ? activeMoods.join(', ') : '◌ 选择心情'; 
 }
 function showPwdModal() { openModal('pwd-modal'); closeModal('settings-modal'); }
 // ==========================================
@@ -1301,23 +2019,22 @@ async function updatePassword() {
 
         // 4. 游击重加密战术 (避开 IDB 异步事务强制中断陷阱)
         for (let k of keys) {
-            // dbSvc.get 会自动调用 CryptoSvc 的旧密钥，将数据解密为明文
-            const plainData = await dbSvc.get(k);
-            
-            if (plainData) {
-                // 在内存中用新密钥重新装填密文
-                const reEncryptedData = { ...plainData };
-                if (plainData.title) reEncryptedData.title = await encryptWithNewKey(plainData.title);
-                if (plainData.content) reEncryptedData.content = await encryptWithNewKey(plainData.content);
-                
-                // 绕过 dbSvc.put (因为其内部绑死的是旧密钥)，直接调用底层事务强制覆盖写入
-                await new Promise((resolve, reject) => {
-                    const req = db.transaction("notes", "readwrite").objectStore("notes").put(reEncryptedData);
-                    req.onsuccess = () => resolve(); 
-                    req.onerror = e => reject(e.target.error);
-                });
-            }
-        }
+			const plainData = await dbSvc.get(k);
+			if (plainData) {
+				const reEncryptedData = { ...plainData };
+				if (plainData.title) reEncryptedData.title = await encryptWithNewKey(plainData.title);
+				if (plainData.content) reEncryptedData.content = await encryptWithNewKey(plainData.content);
+				try {
+					await new Promise((resolve, reject) => {
+						const req = db.transaction("notes", "readwrite").objectStore("notes").put(reEncryptedData);
+						req.onsuccess = () => resolve();
+						req.onerror = e => reject(e.target.error);
+					});
+				} catch (writeErr) {
+					throw new Error(`重加密记录 ${k} 失败: ${writeErr.message}`);
+				}
+			}
+		}
 
         // 5. 跨越奇点：旧时代结束，新时代开启
         const newHashed = await hashStr(newV);
